@@ -1,0 +1,112 @@
+      4      13      20       8      18       9      12       5      11      15       3      17       7      14       1      10       2      19       6      16 
+  -0.65    0.91    0.41   -0.15    0.66   -0.91    0.84    0.28    0.00   -0.76   -0.99   -0.28    0.75    0.14    0.54   -0.84   -0.42    0.99    0.96   -0.96 
+The integer array value 4 has 1 bits.
+The integer array value d has 3 bits.
+The integer array value 14 has 2 bits.
+The integer array value 8 has 1 bits.
+The integer array value 12 has 2 bits.
+The integer array value 9 has 2 bits.
+The integer array value c has 2 bits.
+The integer array value 5 has 2 bits.
+The integer array value b has 3 bits.
+The integer array value f has 4 bits.
+The integer array value 3 has 2 bits.
+The integer array value 11 has 2 bits.
+The integer array value 7 has 3 bits.
+The integer array value e has 3 bits.
+The integer array value 1 has 1 bits.
+The integer array value a has 2 bits.
+The integer array value 2 has 1 bits.
+The integer array value 13 has 3 bits.
+The integer array value 6 has 2 bits.
+The integer array value 10 has 1 bits.
+The sorted integers are:
+      1       2       3       4       5       6       7       8       9      10      11      12      13      14      15      16      17      18      19      20 
+The sorted floats are:
+   0.99    0.96    0.91    0.84    0.75    0.66    0.54    0.41    0.28    0.14    0.00   -0.15   -0.28   -0.42   -0.65   -0.76   -0.84   -0.91   -0.96   -0.99 
+The median value of the integer array is :   10.50
+The median value of the float array is   :    0.07
+The unsigned short value 0x1:
+  ORIG : 0000000000000001
+  REVR : 1000000000000000
+The unsigned short value 0x2:
+  ORIG : 0000000000000010
+  REVR : 0100000000000000
+The unsigned short value 0x3:
+  ORIG : 0000000000000011
+  REVR : 1100000000000000
+The unsigned short value 0x4:
+  ORIG : 0000000000000100
+  REVR : 0010000000000000
+The unsigned short value 0x5:
+  ORIG : 0000000000000101
+  REVR : 1010000000000000
+The unsigned short value 0x6:
+  ORIG : 0000000000000110
+  REVR : 0110000000000000
+The unsigned short value 0x7:
+  ORIG : 0000000000000111
+  REVR : 1110000000000000
+The unsigned short value 0x8:
+  ORIG : 0000000000001000
+  REVR : 0001000000000000
+The unsigned short value 0x9:
+  ORIG : 0000000000001001
+  REVR : 1001000000000000
+The unsigned short value 0xa:
+  ORIG : 0000000000001010
+  REVR : 0101000000000000
+The unsigned short value 0xb:
+  ORIG : 0000000000001011
+  REVR : 1101000000000000
+The unsigned short value 0xc:
+  ORIG : 0000000000001100
+  REVR : 0011000000000000
+The unsigned short value 0xd:
+  ORIG : 0000000000001101
+  REVR : 1011000000000000
+The unsigned short value 0xe:
+  ORIG : 0000000000001110
+  REVR : 0111000000000000
+The unsigned short value 0xf:
+  ORIG : 0000000000001111
+  REVR : 1111000000000000
+The unsigned short value 0x10:
+  ORIG : 0000000000010000
+  REVR : 0000100000000000
+The unsigned short value 0x11:
+  ORIG : 0000000000010001
+  REVR : 1000100000000000
+The unsigned short value 0x12:
+  ORIG : 0000000000010010
+  REVR : 0100100000000000
+The unsigned short value 0x13:
+  ORIG : 0000000000010011
+  REVR : 1100100000000000
+The unsigned short value 0x14:
+  ORIG : 0000000000010100
+  REVR : 0010100000000000
+100 +                   *
+ 95 +                  **
+ 90 +                 ***
+ 85 +                ****
+ 80 +               *****
+ 75 +              ******
+ 70 +             *******
+ 65 +            ********
+ 60 +           *********
+ 55 +          **********
+ 50 +         ***********
+ 45 +        ************
+ 40 +       *************
+ 35 +      **************
+ 30 +     ***************
+ 25 +    ****************
+ 20 +   *****************
+ 15 +  ******************
+ 10 + *******************
+  5 +********************
+  0 +********************
+    +--------------------
+              11111111112
+     12345678901234567890

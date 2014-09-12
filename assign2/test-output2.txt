@@ -1,0 +1,112 @@
+     11       5       8       9      11      11      29      30      31      18       9       4       3      27      11      10      14      22      23       9 
+   0.00    0.28   -0.15   -0.91    0.00    0.00   -0.75    0.15    0.91    0.66   -0.91   -0.65   -0.99   -0.29    0.00   -0.84    0.14   -1.00   -0.53   -0.91 
+The integer array value b has 3 bits.
+The integer array value 5 has 2 bits.
+The integer array value 8 has 1 bits.
+The integer array value 9 has 2 bits.
+The integer array value b has 3 bits.
+The integer array value b has 3 bits.
+The integer array value 1d has 4 bits.
+The integer array value 1e has 4 bits.
+The integer array value 1f has 5 bits.
+The integer array value 12 has 2 bits.
+The integer array value 9 has 2 bits.
+The integer array value 4 has 1 bits.
+The integer array value 3 has 2 bits.
+The integer array value 1b has 4 bits.
+The integer array value b has 3 bits.
+The integer array value a has 2 bits.
+The integer array value e has 3 bits.
+The integer array value 16 has 3 bits.
+The integer array value 17 has 4 bits.
+The integer array value 9 has 2 bits.
+The sorted integers are:
+      3       4       5       8       9       9       9      10      11      11      11      11      14      18      22      23      27      29      30      31 
+The sorted floats are:
+   0.91    0.66    0.28    0.15    0.14    0.00    0.00    0.00    0.00   -0.15   -0.29   -0.53   -0.65   -0.75   -0.84   -0.91   -0.91   -0.91   -0.99   -1.00 
+The median value of the integer array is :   11.00
+The median value of the float array is   :   -0.22
+The unsigned short value 0x3:
+  ORIG : 0000000000000011
+  REVR : 1100000000000000
+The unsigned short value 0x4:
+  ORIG : 0000000000000100
+  REVR : 0010000000000000
+The unsigned short value 0x5:
+  ORIG : 0000000000000101
+  REVR : 1010000000000000
+The unsigned short value 0x8:
+  ORIG : 0000000000001000
+  REVR : 0001000000000000
+The unsigned short value 0x9:
+  ORIG : 0000000000001001
+  REVR : 1001000000000000
+The unsigned short value 0x9:
+  ORIG : 0000000000001001
+  REVR : 1001000000000000
+The unsigned short value 0x9:
+  ORIG : 0000000000001001
+  REVR : 1001000000000000
+The unsigned short value 0xa:
+  ORIG : 0000000000001010
+  REVR : 0101000000000000
+The unsigned short value 0xb:
+  ORIG : 0000000000001011
+  REVR : 1101000000000000
+The unsigned short value 0xb:
+  ORIG : 0000000000001011
+  REVR : 1101000000000000
+The unsigned short value 0xb:
+  ORIG : 0000000000001011
+  REVR : 1101000000000000
+The unsigned short value 0xb:
+  ORIG : 0000000000001011
+  REVR : 1101000000000000
+The unsigned short value 0xe:
+  ORIG : 0000000000001110
+  REVR : 0111000000000000
+The unsigned short value 0x12:
+  ORIG : 0000000000010010
+  REVR : 0100100000000000
+The unsigned short value 0x16:
+  ORIG : 0000000000010110
+  REVR : 0110100000000000
+The unsigned short value 0x17:
+  ORIG : 0000000000010111
+  REVR : 1110100000000000
+The unsigned short value 0x1b:
+  ORIG : 0000000000011011
+  REVR : 1101100000000000
+The unsigned short value 0x1d:
+  ORIG : 0000000000011101
+  REVR : 1011100000000000
+The unsigned short value 0x1e:
+  ORIG : 0000000000011110
+  REVR : 0111100000000000
+The unsigned short value 0x1f:
+  ORIG : 0000000000011111
+  REVR : 1111100000000000
+100 +                            *
+ 95 +                           **
+ 90 +                          ***
+ 85 +                        *****
+ 80 +                    *********
+ 75 +                   **********
+ 70 +               **************
+ 65 +           ******************
+ 60 +        *********************
+ 55 +        *********************
+ 50 +        *********************
+ 45 +        *********************
+ 40 +       **********************
+ 35 +      ***********************
+ 30 +      ***********************
+ 25 +      ***********************
+ 20 +     ************************
+ 15 +  ***************************
+ 10 + ****************************
+  5 +*****************************
+  0 +*****************************
+    +-----------------------------
+            1111111111222222222233
+     34567890123456789012345678901
