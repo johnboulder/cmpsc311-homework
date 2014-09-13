@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include "a2support.h"
+#include <math.h>
 
 ////////////////////////////////////////////////////////////////////////////////
 //
@@ -104,27 +105,27 @@ void binaryString( char* value, int length, int toConvertToBinary )
 }
 // Ask about this. We're reversing bits, but I guess, does he want us to be converting to binary as well
 // or did he intend for this to be an array of ints?
-unsigned short reverseBits( unsigned short int value )
+unsigned short reverseBits( unsigned short value )
 {
-	int bitArray = [10];
+	static const int n = 16; // Minimum bits in a short
+	double bitArray[n];
+	double* ptr = &bitArray[0];
 	int i = 0;
         while( value>=1 ) 
         {
-                if( integer%2 == 1 )
-                        *value = '1';
-                else if( integer%2 == 0)
-                        *value = '0';
-
-                integer/=2;
-                value+=1;
+		*ptr = value%2;
+                value/=2;
+		ptr++;
         }
-
+	double returnValueDble = 0;
+	double j = 0;
+	for( i = 0; i < n; i++)
+	{
+		returnValueDble+=pow(bitArray[i] * 2, j);
+		j++;
+	} 
+	return (unsigned short) returnValueDble;
 }
-
-
-
-
-
 
 void floatQuickSort( float* floatArray, int left, int right )
 {
@@ -137,4 +138,5 @@ void integerQuickSort( int* intArray, int left, int right )
 void showCDF( int* intArray, int length)
 {
 
-} 
+}
+ 
