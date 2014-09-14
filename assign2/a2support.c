@@ -127,16 +127,117 @@ unsigned short reverseBits( unsigned short value )
 	return (unsigned short) returnValueDble;
 }
 
-void floatQuickSort( float* floatArray, int left, int right )
+// Swaps two elements in an array of integers
+// this could probably be made into a template function
+void integerSwap(int* array, int index1, int index2)
 {
-
+	int value = array[index1];
+	array[index1] = array[index2];
+	array[index2] = value;
 }
+
+// Partitions an integer array into two semi-sorted parts
+// Used by integerQuicksort
+int integerPart(int* toPart, int left, int right)
+{
+	int i = 0;
+	int storeIndex = left;
+	int pivotIndex = (left+right)/2;
+	int pivot = toPart[pivotIndex];
+	integerSwap(toPart, pivotIndex, right);
+
+	//might be to right-1
+	for(i=left; i<right; i++)
+	{
+		if(toPart[i]<pivot)
+		{
+			integerSwap(toPart, i, storeIndex);
+			storeIndex += 1;
+		}
+	}
+
+	integerSwap(toPart, storeIndex, right);
+	return storeIndex;
+}
+
 void integerQuickSort( int* intArray, int left, int right )
 {
+	if(left<right)
+	{
+		int p = integerPart(intArray, left, right);
+		integerQuickSort(intArray, left, p-1);
+		integerQuickSort(intArray, p+1, right);
+	}
 
 }
-void showCDF( int* intArray, int length)
+
+void showCDF( int* array, int length )
 {
+	int a = array[0];
+	int b = array[length-1];
+	// Probability that some X, a<X<=b, can be described as X<=x. The probability that some random X will be less than or equal to an x in the set of values.
 
+	// Iterate from the top of the array to the bottom
 }
- 
+
+void floatSwap(float* array, int index1, int index2)
+{
+	float value = array[index1];
+	array[index1] = array[index2];
+	array[index2] = value;
+}
+
+int floatPart(float* toPart, int left, int right)
+{
+	int i = 0;
+	int storeIndex = left;
+	int pivotIndex = (left+right)/2;
+	float pivot = toPart[pivotIndex];
+	floatSwap(toPart, pivotIndex, right);
+
+	//might be to right-1
+	for(i=left; i<right; i++)
+	{
+		if(toPart[i]<pivot)
+		{
+			floatSwap(toPart, i, storeIndex);
+			storeIndex += 1;
+		}
+	}
+
+	floatSwap(toPart, storeIndex, right);
+	return storeIndex;
+}
+
+void floatQuickSort( float* floatArray, int left, int right )
+{
+	if(left<right)
+	{
+		int p = floatPart(floatArray, left, right);
+		floatQuickSort(floatArray, left, p-1);
+		floatQuickSort(floatArray, p+1, right);
+	}
+}
+
+// Not fully implemented. Saving for later in case in the future if my quicksorts need to be improved
+int choosePivot(float* array, int left, int right)
+{
+	int i = 0;
+	float* greatest = &array[0];
+	float* least = &array[0];
+	float* median = &array[0];
+	float fleft = array[left];
+	float fright = array[right];
+	float middle = array[(left+right)/2];
+	float medianArray[3] = {fleft, middle, fright};
+	for(i = 0; i<3; i++)
+	{
+		if(medianArray[i] > *greatest)
+			greatest = &medianArray[i];
+		if(medianArray[i] < *least)
+			least = &medianArray[i];
+	}
+	if(*median == middle)
+		return 1; 
+	return 0;
+}
