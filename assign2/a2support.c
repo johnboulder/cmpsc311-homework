@@ -21,9 +21,11 @@ void showFloats( float* floatArray, int length )
 	int i = 0;
 	for( i = 0; i<length; i++ )
 	{
-		printf("	%f", floatArray[i] );			
+		printf("	%.2f", floatArray[i] );			
 	}
+	printf("\n");
 }
+
 void showIntegers( int* intArray, int length )
 {
 	int i = 0;
@@ -31,6 +33,7 @@ void showIntegers( int* intArray, int length )
         {
                 printf("        %d", intArray[i] );
         }
+	printf("\n");
 }
 float medianFloat( float* floatArray, int length )
 {
@@ -85,47 +88,45 @@ int countBits( int integer )
 	
 	return numberOfBits;
 }
+
 void binaryString( char* value, int length, int toConvertToBinary )
 {
         // Ensure that the integer is non-negative
         int integer = abs( toConvertToBinary );
 
-        // Loop while the integer is greater than or equal to 1
-        while( integer>=1 )
-        {
-                if( integer%2 == 1 )
-			*value = '1';
-		else if( integer%2 == 0)
-			*value = '0';
-                integer/=2;
-		value+=1;
-        }
-	
-	*value = '\n';
-}
-// Ask about this. We're reversing bits, but I guess, does he want us to be converting to binary as well
-// or did he intend for this to be an array of ints?
-unsigned short reverseBits( unsigned short value )
-{
-	static const int n = 16; // Minimum bits in a short
-	double bitArray[n];
-	double* ptr = &bitArray[0];
-	int i = 0;
-        while( value>=1 ) 
-        {
-		*ptr = value%2;
-                value/=2;
-		ptr++;
-        }
-	double returnValueDble = 0;
-	double j = 0;
-	for( i = 0; i < n; i++)
+	//value[length] = '\0';
+        // 
+        int i = 0;
+	while(i<16)
 	{
-		returnValueDble+=pow(bitArray[i] * 2, j);
-		j++;
-	} 
-	return (unsigned short) returnValueDble;
+		*value = 0;
+		value+=1;
+		i++;
+	}
+	value[length] = '\0';
+	while(i>-1)
+	{
+		if(integer & 0x1)
+			*value = '1';
+		integer>>=1;
+		i--;
+		value--;
+	}
 }
+
+unsigned short reverseBits( unsigned short value )
+{ 
+	unsigned short returnNum = 0;
+	int i = 0;
+	unsigned short temp;
+	for (i = 0; i <= 16; i++)
+	{
+		temp = (value & (1 << i));
+		if(temp)
+			returnNum |= (1<<(15 - i));
+	}
+	return returnNum;
+}	
 
 // Swaps two elements in an array of integers
 // this could probably be made into a template function
@@ -171,13 +172,82 @@ void integerQuickSort( int* intArray, int left, int right )
 
 }
 
+float getCDF( float* cdfArray, int* intArray, int value, int length )
+{
+	int i = 0;
+	int index = -1;
+	int indexOfGreater = -1;
+	for(i=0; i<=length; i++)
+	{
+		if(intArray[i] == value)
+		{
+			index = i;
+			break;
+		}
+		if(intArray[i]>value && indexOfGreater == -1)
+		{
+			indexOfGreater = i;
+		}
+	}
+	if(index != -1)
+		return cdfArray[index];
+	else 
+		return cdfArray[indexOfGreater-1];
+}
+
 void showCDF( int* array, int length )
 {
+	int i = 0;
+	float cdf[length];
 	int a = array[0];
 	int b = array[length-1];
-	// Probability that some X, a<X<=b, can be described as X<=x. The probability that some random X will be less than or equal to an x in the set of values.
 
-	// Iterate from the top of the array to the bottom
+	for(i=0;i<length; i++)
+	{
+		float cdfValue = (float)(i+1)/length;
+		//printf("%f", cdfValue);
+		//printf("\n");
+		cdf[i] = cdfValue;//roundf((float) ((i+1)/length))*100;
+	}
+
+	for(i=100; i>=0; i-=5)
+	{
+		printf("%3d +", i);
+		int j = 0;
+		for(j=0;j<=b-a;j++)
+		{
+			float cdfToPrint = getCDF(cdf, array, j+a, length);
+			int cdfToInt = (int) (cdfToPrint*100);
+			if( cdfToInt >= i)
+				printf("*");
+			else
+				printf(" ");
+		}
+		printf("\n");
+	}
+	printf("    +");
+	for(i=0; i<=b-a; i++)
+	{
+		printf("-");
+	}
+	printf("\n");
+	
+	printf("    +");
+	for(i=a; i<=b; i++)
+	{
+		if(i<10)
+			printf(" ");
+		else
+			printf("%d", i/10);
+	}
+	printf("\n");
+
+	printf("    +");
+	for(i=a; i<=b; i++)
+	{
+		printf("%d", i%10);
+	}
+	printf("\n");
 }
 
 void floatSwap(float* array, int index1, int index2)
