@@ -7,96 +7,7 @@
 //  Author         : Patrick McDaniel
 //  Last Modified  : Tue Sep 16 19:38:42 EDT 2014
 //
-/* This file is the only thing we have to change for this assignment
- * 
- * TODO 
- * Everytime someone calls something like open or read, we're going to perform
- * that shit here.*/
-// 
-// There are examples in the slides of evrything we need to do. THey are currently wrong. Email him about it
-// slides will be fixed by tomorrow
-//
-// CRUD - stands for Create, read, update, and delete - 4 options we have
-// Objects are immutable. This means that we cannot resize the data we allocated to the object. we have to delete it and then rewrite it somewhere else 
-//
-// This code is some of the most important stuff in an OS
-//
-// crud_init- initialization function. This must be called before we do anything. We need to check if we've initialized the crud interface before
-// we call crud_init. If we haven't, then it's the first thing we should do.
-//
-// crud_create- block of data and length and a command, and it will create an object in the object store.
-//
-// when we open a file. we do init, and then we have to create our fileHandle, and ensure that it's not already initialized
-// gotta make sure stuff like buffers aren't null
-//
-// open: assign fd file len=0
-// read: return because file len is 0. pos = 0;
-// write: create object of specified length using crud_init. objectio = x. file length = 7. pos = 7
-// 
-// crud_init returns an object id
-// 
-// all files share the same bitposition
-//
-// CANNOT HOLD THE DATA OF THE FILE LOCALLY. ONCE YOU RETURN FROM ANY OF THE FUNCTIONS. YOU CANNOT HOLD ANYTHING 
-// BUT THE FILE DESCRIPTOR, THE POSITION, AND THE OBJECT ID. ONLY THINGS YOU CAN HOLD ON TO IN YOUR DRIVER
-// WANT TO KEEP AMOUNT OF INFO IN DRIVER AS SMALL AS POSSIBLE
-// can just make 3 global variables for these three things
-//
-// assume:
-// fd=16
-// oid=906
-// dos = 0
-// we do a read 3:
-// check for good values
-// get(906) which pulls data from the object store into our program. it always pulls that entire object. we never pull partial objects
-// those 3 bytes are read into a buffer, and then returned.
-// 
-// filedescriptor can be a constant int that we assign for this assingment. we'll never be dealing with multiple objects at once.
-//
-// WE GET PERFORMANCE IMPROVEMENT FROM NEVER APPENDING TO AN EXISTING OBJECT. WE ALWAYS CREATE A NEW OBJECT, DELETE THE OLD ONE, AND THEN WRITE THE 
-// OBJECT TO SOME PLACE.
-//
-// the data we are dealing with is untyped data as far as the buffers go.
-//
-// CRUD_MAX is the max size any file can be for this assignment
-//
-// anticipate for the next assignment.
-//
-// PREPARE FOR MAINTAINING MORE THAN JUST ONE FILE REFERENCE
-//
-// can perform an update instead of a delete/create if you're writing to the middle of a file
-//
-// crud_update - replaces the data in an object. must be the exact same size.
-//
-// how we interact with hardware
-//
-// when we interact with the crud interface, the only thing we call is called the crud bus
-// 
-// Big endian?
-// 
-// may not ever use flags in this class on the crud bus
-//
-// responses come back in the same exact format, but with all the information referring to the properties of the object
-//
-// when we run the unit test
-// ./crud_sim -u -v
-// CRUD unit test completed successfully
-//
-// LOOK INTO THE UNIT TEST BEFORE WE GET STARTED. AND FIGURE OUT WHAT IT'S DOING. IT WILL GIVE INSIGHT INTO YOUR CODE
-//
-// cmpsc311.log.h, there is a log message that you should look at for debugging
-// make log output that sends itself to the log and you know what's going on
-// THE LOG IS COMING OUT OF STDERR
-//
-// the 64 bits:
-// first 32 - 0 to 31 are the OID
-//
-// uint64_t CrudRequest create_crudrequest(uint32-t oid, req, length, flags, R)
-// v = oid<<32
-// v = req<<28 : oid is now gone.
-// therefore, we want to do v = v|(req<<28) LOOK AT THE GRAPHIC FOR A BETTER UNDERSTANDING
-// 
-// first time we get a read, we create an object in the object store
+
 // Includes
 #include <malloc.h>
 #include <string.h>
@@ -122,11 +33,13 @@
 #define FILE_HANDLE_BASE_VALUE 16
 
 int8_t crud_initialized = 0;
-int16_t curret_handle = FILE_HANDLE_BASE_VALUE;
+int16_t current_handle = FILE_HANDLE_BASE_VALUE;
 uint32_t current_position = 0;
+uint32_t *tmpBuf[CRUD_MAX_OBJECT_SIZE] = { [0 ... CRUD_MAX_OBJECT_SIZE-1] = 0};
+
 // File structure.
 // May in future become useful in keeping track of a shitload of concurrent files
-struct file_st 
+typedef struct 
 {
 	//TODO find out if we have to remove any of this stuff to comply with what we're keeping track of
 	int32_t oid;
@@ -135,7 +48,9 @@ struct file_st
 	int8_t flags;
 	int8_t result;
 	int16_t file_handle; // Known as fd in most functions
-};
+} file_st;
+
+file_st current_file = { 0, 0, 0, 0, 0, 0 };
 
 // Type for UNIT test interface
 typedef enum 
@@ -146,7 +61,15 @@ typedef enum
     CIO_UNIT_TEST_SEEK   = 3,
 } CRUD_UNIT_TEST_TYPE;
 
-//
+
+CrudRequest createRequest(int32_t oid, int8_t request, int32_t length);
+
+file_st processResponse(CrudResponse res);
+
+int16_t getNewHandle();
+
+void crud_init();
+
 // Implementation
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -157,14 +80,21 @@ typedef enum
 // Inputs       : path - the path "in the storage array"
 // Outputs      : file handle if successful, -1 if failure
 // make an association between path and a file handle
-// we'll return an integer that is our file handle
+// Literally all we're doing is returning an integer that is our file handle
 // once returned, all context shit relating to the position in the file can disappear. this is done by close
-//
 int16_t crud_open(char *path) 
 {
 	if(!crud_initialized)
 		crud_init();
-	struct file_st responseFile = processResponse();
+	
+	current_file.oid = 0;
+	current_file.request = 0;
+	current_file.length = 0;
+	current_file.result = 0;
+	current_file.flags = 0;
+	current_file.file_handle = getNewHandle();
+	
+	return current_file.file_handle;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -177,6 +107,12 @@ int16_t crud_open(char *path)
 
 int16_t crud_close(int16_t fh) 
 {
+	current_file.oid = 0;
+	current_file.request = 0;
+	current_file.length = 0;
+	current_file.result = 0;
+	current_file.flags = 0;
+	current_file.file_handle = 0;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -192,6 +128,34 @@ int16_t crud_close(int16_t fh)
 
 int32_t crud_read(int16_t fd, void *buf, int32_t count) 
 {
+
+	if(!crud_initialized)
+		crud_init();
+	
+	// TODO find out if we actually need to use the file handle here for anything.
+	// Should we check if the current_file is initialized at all?
+	// If not, should we initialize a file with the given file handle?
+	//if(fd != current_file.file_handle)
+	
+	CrudRequest req = createRequest(current_file.oid, CRUD_READ, CRUD_MAX_OBJECT_SIZE);
+	CrudResponse res = crud_bus_request(req, buf);
+	file_st file = processResponse(res);
+
+	if(file.result == 1)
+		return -1;
+
+	int i = 0;
+
+	for( i = current_position; i<current_position+count; i++)
+	{
+		// TODO unsure of this
+		tmpBuf[i-current_position] = ((uint32_t*)buf)[i];
+	}
+
+	current_position+=count;
+	buf = tmpBuf[0];
+
+	return count;
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////
@@ -228,12 +192,20 @@ int32_t crud_seek(int16_t fd, uint32_t loc)
 
 }
 
-int16_t crud_init()
+void crud_init()
 {
 	void *buf;
+	//CRUD_REQUEST_TYPES requestType = CRUD_INIT;
 	CrudRequest req = createRequest(0, CRUD_INIT, 0);
 	CrudResponse res = crud_bus_request(req, buf);
-	processResponse(res);
+	file_st file = processResponse(res);
+	
+	if(!file.result)
+	{
+		//TODO write some log and error stuff here
+	}
+
+	crud_initialized = 1;
 }
 
 CrudRequest createRequest(int32_t oid, int8_t request, int32_t length)
@@ -242,16 +214,16 @@ CrudRequest createRequest(int32_t oid, int8_t request, int32_t length)
 	
 	// Add the 32 bits of oid to the 64 least significant bits of req
 	req+= oid;
-	req<<4;
+	req<<=4;
 
 	req+= (15 & request);
-	req<<24;
+	req<<=24;
 
 	req+= (16777215 & length);
-	req<<3;
+	req<<=3;
 
 	//TODO confirm that we don't actually need to use flags or result bits in any requests
-	req<<1;
+	req<<=1;
 
 	return req;
 }
@@ -262,7 +234,7 @@ file_st processResponse(CrudResponse res)
 	 * find out how to correctly create logs, and log an error for when the result code in response is 1 (failure)
 	 */
 	int i = 0;
-	struct file_st file;
+	file_st file;
 	file.result = (int8_t)( 1 & res );
 	// TODO include check here for response code of 1
 	res>>=1;
@@ -280,7 +252,7 @@ file_st processResponse(CrudResponse res)
 	res>>=4;
 
 	// OID
-	file.request = (int32_t)(4294967295 & res);
+	file.oid = (int32_t)(4294967295 & res);
 	// No need to shift res again.
 	
 	// Get the file handle
