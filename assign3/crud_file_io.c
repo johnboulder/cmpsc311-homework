@@ -35,7 +35,6 @@
 int8_t crud_initialized = 0;
 int16_t current_handle = FILE_HANDLE_BASE_VALUE;
 uint32_t current_position = 0;
-uint32_t *tmpBuf[CRUD_MAX_OBJECT_SIZE] = { [0 ... CRUD_MAX_OBJECT_SIZE-1] = 0};
 
 // File structure.
 // May in future become useful in keeping track of a shitload of concurrent files
@@ -107,6 +106,7 @@ int16_t crud_open(char *path)
 
 int16_t crud_close(int16_t fh) 
 {
+	current_position = 0;
 	current_file.oid = 0;
 	current_file.request = 0;
 	current_file.length = 0;
@@ -131,7 +131,9 @@ int32_t crud_read(int16_t fd, void *buf, int32_t count)
 
 	if(!crud_initialized)
 		crud_init();
-	
+
+	char tmpBuf[CRUD_MAX_OBJECT_SIZE];
+
 	// TODO find out if we actually need to use the file handle here for anything.
 	// Should we check if the current_file is initialized at all?
 	// If not, should we initialize a file with the given file handle?
@@ -149,11 +151,11 @@ int32_t crud_read(int16_t fd, void *buf, int32_t count)
 	for( i = current_position; i<current_position+count; i++)
 	{
 		// TODO unsure of this
-		tmpBuf[i-current_position] = ((uint32_t*)buf)[i];
+		tmpBuf[i-current_position] = ((char*)buf)[i];
 	}
 
 	current_position+=count;
-	buf = tmpBuf[0];
+	buf = &tmpBuf[0];
 
 	return count;
 }
@@ -173,8 +175,65 @@ int32_t crud_read(int16_t fd, void *buf, int32_t count)
 //
 int32_t crud_write(int16_t fd, void *buf, int32_t count) 
 {
-// Add some number of bytes to the front of the file 
-// If count is past current end of file, write over the end of the file
+	// Add some number of bytes to the front of the file 
+	// If count is past current end of file, write over the end of the file
+
+	// Find file in heap that we're writing to.
+	
+	// TODO we aren't supposed to maintain any file content or length information in 
+	// local structures. Find out if this applies to the file length returned in 
+	// responses.
+	
+	char tmpBuf[CRUD_MAX_OBJECT_SIZE];
+	if(!crud_initialized)
+		crud_init();
+	
+	// Given the fild handle, find it's OID and read the data from the store
+	CrudRequest req = createRequest(current_file.oid, CRUD_READ, CRUD_MAX_OBJECT_SIZE);
+	CrudResponse res = crud_bus_request(req, tmpBuf);
+	file_st file_to_update = processResponse(res);
+	current_file = file_to_update;
+
+	if(file_to_update.result == 1)
+		return -1;
+
+	// Does not account for when the file is already the max object length
+	if(count+current_position > current_file.length)
+	{
+		// Delete the file, and then create a new file of max size
+		req = createRequest(current_file.oid, CRUD_DELETE, CRUD_MAX_OBJECT_SIZE);
+		
+		uint32_t tmpPos = current_position;
+
+		crud_close(current_file.file_handle);
+		crud_bus_request(req, NULL);
+
+		req = createRequest(0, CRUD_CREATE, CRUD_MAX_OBJECT_SIZE);
+		res = crud_bus_request(req, tmpBuf);
+		file_st new_file = processResponse(res);
+
+		current_file = new_file;
+
+		current_position = tmpPos;
+	}
+	
+	int i = 0;
+	for( i = 0; i<count; i++)
+	{
+		tmpBuf[current_position+i] = ((char*)buf)[i];
+	}
+
+	req = createRequest(current_file.oid, CRUD_UPDATE, current_file.length);
+	res = crud_bus_request(req, tmpBuf);
+	file_to_update = processResponse(res);
+	
+	current_file = file_to_update;
+
+	current_position+=count;
+
+	
+
+	return count;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -194,7 +253,7 @@ int32_t crud_seek(int16_t fd, uint32_t loc)
 
 void crud_init()
 {
-	void *buf;
+	void *buf = NULL;
 	//CRUD_REQUEST_TYPES requestType = CRUD_INIT;
 	CrudRequest req = createRequest(0, CRUD_INIT, 0);
 	CrudResponse res = crud_bus_request(req, buf);
@@ -228,12 +287,14 @@ CrudRequest createRequest(int32_t oid, int8_t request, int32_t length)
 	return req;
 }
 
+// TODO we aren't supposed to maintain any file content or length information in 
+// local structures. Find out if this applies to the file length returned in 
+// responses.
 file_st processResponse(CrudResponse res)
 {
 	/* TODO
 	 * find out how to correctly create logs, and log an error for when the result code in response is 1 (failure)
 	 */
-	int i = 0;
 	file_st file;
 	file.result = (int8_t)( 1 & res );
 	// TODO include check here for response code of 1
@@ -257,6 +318,8 @@ file_st processResponse(CrudResponse res)
 	
 	// Get the file handle
 	file.file_handle = getNewHandle();
+
+	return file;
 }
 
 int16_t getNewHandle()
