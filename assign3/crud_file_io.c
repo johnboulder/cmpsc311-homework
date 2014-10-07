@@ -34,7 +34,7 @@
 
 int8_t crud_initialized = 0;
 int16_t current_handle = FILE_HANDLE_BASE_VALUE;
-uint32_t current_position = 0;
+int32_t current_position = 0;
 
 // File structure.
 // May in future become useful in keeping track of a shitload of concurrent files
@@ -86,12 +86,19 @@ int16_t crud_open(char *path)
 	if(!crud_initialized)
 		crud_init();
 	
-	current_file.oid = 0;
-	current_file.request = 0;
-	current_file.length = 0;
-	current_file.result = 0;
-	current_file.flags = 0;
+	CrudRequest req = createRequest(0, CRUD_CREATE, 0);
+	CrudResponse res = crud_bus_request(req, NULL);
+	file_st file = processResponse(res);
+
+	current_file = file;
+	current_position = 0;
+	//printf("1crud_open \n");
+	if(current_file.result == 1)
+		return -1;
+	//printf("2crud_open \n");
+
 	current_file.file_handle = getNewHandle();
+	//printf("3crud_open \n");
 	
 	return current_file.file_handle;
 }
@@ -113,6 +120,8 @@ int16_t crud_close(int16_t fh)
 	current_file.result = 0;
 	current_file.flags = 0;
 	current_file.file_handle = 0;
+
+	return 0;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -128,7 +137,7 @@ int16_t crud_close(int16_t fh)
 
 int32_t crud_read(int16_t fd, void *buf, int32_t count) 
 {
-
+	//printf("start count:%d \n", count);
 	if(!crud_initialized)
 		crud_init();
 
@@ -140,23 +149,27 @@ int32_t crud_read(int16_t fd, void *buf, int32_t count)
 	//if(fd != current_file.file_handle)
 	
 	CrudRequest req = createRequest(current_file.oid, CRUD_READ, CRUD_MAX_OBJECT_SIZE);
-	CrudResponse res = crud_bus_request(req, buf);
+	CrudResponse res = crud_bus_request(req, tmpBuf);
 	file_st file = processResponse(res);
 
 	if(file.result == 1)
 		return -1;
 
+
 	int i = 0;
+	if(count+current_position > current_file.length)
+		count = current_file.length - current_position;
 
 	for( i = current_position; i<current_position+count; i++)
 	{
 		// TODO unsure of this
-		tmpBuf[i-current_position] = ((char*)buf)[i];
+		//tmpBuf[i-current_position] = ((char*)buf)[i];
+		((char*)buf)[i-current_position] = tmpBuf[i];
 	}
 
 	current_position+=count;
-	buf = &tmpBuf[0];
-
+	//buf = &tmpBuf[0];
+	//printf("end count:%d \n", count);
 	return count;
 }
 
@@ -200,15 +213,19 @@ int32_t crud_write(int16_t fd, void *buf, int32_t count)
 	// Does not account for when the file is already the max object length
 	if(count+current_position > current_file.length)
 	{
+		//printf("File write size reassignment occurred\n");
 		// Delete the file, and then create a new file of max size
-		req = createRequest(current_file.oid, CRUD_DELETE, CRUD_MAX_OBJECT_SIZE);
-		
-		uint32_t tmpPos = current_position;
+		int32_t length = count+current_position;
+		if(length>CRUD_MAX_OBJECT_SIZE)
+			length = CRUD_MAX_OBJECT_SIZE;
+
+		req = createRequest(current_file.oid, CRUD_DELETE, current_file.length);
+		int32_t tmpPos = current_position;
 
 		crud_close(current_file.file_handle);
 		crud_bus_request(req, NULL);
 
-		req = createRequest(0, CRUD_CREATE, CRUD_MAX_OBJECT_SIZE);
+		req = createRequest(0, CRUD_CREATE, length);
 		res = crud_bus_request(req, tmpBuf);
 		file_st new_file = processResponse(res);
 
@@ -220,7 +237,7 @@ int32_t crud_write(int16_t fd, void *buf, int32_t count)
 	int i = 0;
 	for( i = 0; i<count; i++)
 	{
-		tmpBuf[current_position+i] = ((char*)buf)[i];
+		tmpBuf[current_position+i] = ((unsigned char*)buf)[i];
 	}
 
 	req = createRequest(current_file.oid, CRUD_UPDATE, current_file.length);
@@ -230,8 +247,6 @@ int32_t crud_write(int16_t fd, void *buf, int32_t count)
 	current_file = file_to_update;
 
 	current_position+=count;
-
-	
 
 	return count;
 }
@@ -247,8 +262,13 @@ int32_t crud_write(int16_t fd, void *buf, int32_t count)
 
 int32_t crud_seek(int16_t fd, uint32_t loc) 
 {
-// You'll never get a seek that's outside the scope of your program in this assignment (assign3)
+	// You'll never get a seek that's outside the scope of your program in this assignment (assign3)
 
+	if(!crud_initialized)
+		crud_init();
+	
+	current_position = (int32_t)loc;
+	return 0;
 }
 
 void crud_init()
@@ -299,25 +319,31 @@ file_st processResponse(CrudResponse res)
 	file.result = (int8_t)( 1 & res );
 	// TODO include check here for response code of 1
 	res>>=1;
-	
+	//printf("result:%u\n",file.result);
+
 	// Flags
 	file.flags = (int8_t)( 7 & res );
 	res>>=3;
+	//printf("flags:%u\n",file.flags);
 
 	// Length
 	file.length = (int32_t)(16777215 & res);
 	res>>=24;
+	//printf("length:%u\n",file.length);
 
 	// Request
 	file.request = (int8_t)(15 & res);
 	res>>=4;
+	//printf("request:%u\n",file.request);
 
 	// OID
 	file.oid = (int32_t)(4294967295 & res);
 	// No need to shift res again.
-	
+	//printf("oid:%u\n",file.oid);
+
 	// Get the file handle
 	file.file_handle = getNewHandle();
+	//printf("file_handle:%u\n",file.file_handle);
 
 	return file;
 }
@@ -368,8 +394,11 @@ int crudIOUnitTest(void) {
 		// Pick a random command
 		if (cio_utest_length == 0) {
 			cmd = CIO_UNIT_TEST_WRITE;
+			//printf("392 \n");
 		} else {
 			cmd = getRandomValue(CIO_UNIT_TEST_READ, CIO_UNIT_TEST_SEEK);
+			//printf("395 \n");
+
 		}
 
 		// Execute the command
@@ -378,6 +407,7 @@ int crudIOUnitTest(void) {
 		case CIO_UNIT_TEST_READ: // read a random set of data
 			count = getRandomValue(0, cio_utest_length);
 			logMessage(LOG_INFO_LEVEL, "CRUD_IO_UNIT_TEST : read %d at position %d", bytes, cio_utest_position);
+			//printf("Count in Unit Test: %d \n");
 			bytes = crud_read(fh, tbuf, count);
 			if (bytes == -1) {
 				logMessage(LOG_ERROR_LEVEL, "CRUD_IO_UNIT_TEST : Read failure.");
