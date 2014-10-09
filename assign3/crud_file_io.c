@@ -1,11 +1,11 @@
 ////////////////////////////////////////////////////////////////////////////////
 //
-//  File           : crud_file_io.h
+//  File           : crud_file_io.c
 //  Description    : This is the implementation of the standardized IO functions
 //                   for used to access the CRUD storage system.
 //
 //  Author         : John Walter Stockwell
-//  Last Modified  : Tue Sep 16 19:38:42 EDT 2014
+//  Last Modified  : Thurs Oct 9 19:38:42
 //
 
 // Includes
@@ -26,8 +26,11 @@
 int8_t crud_initialized = 0;
 int16_t current_handle = FILE_HANDLE_BASE_VALUE;
 
-// File structure.
+// Struct intended for interacting with the file store
 // May in future become useful in keeping track of a shitload of concurrent files
+// Currently, I've ensured that data that isn't supposed to be global is not
+// maintained globally (Although it is still taking up space in the stack... so 
+// I'll probably do something about that in a later assignment)
 typedef struct 
 {
 	// After exitting functions, we can only hold the file descriptor, position, and OID
@@ -42,6 +45,7 @@ typedef struct
 
 //TODO Should possibly include an implementation here for a linked list for later
 
+
 file_st current_file = { 0, 0, 0, 0, 0, 0 };
 
 // Type for UNIT test interface
@@ -53,7 +57,11 @@ typedef enum
     CIO_UNIT_TEST_SEEK   = 3,
 } CRUD_UNIT_TEST_TYPE;
 
-// Prototypes
+// Prototypes for some extra helper functions at the bottom of this class.
+// Used for a variety of things. See there individual comments for more 
+// details
+//
+// NOTE TODO: Update these functions to receive pointers so as to save memory
 CrudRequest createRequest(int32_t oid, int8_t request, int32_t length);
 file_st processResponse(CrudResponse res);
 int16_t getNewHandle();
@@ -104,6 +112,7 @@ int16_t crud_open(char *path)
 
 int16_t crud_close(int16_t fh) 
 {
+	// Set all the shit to zero
 	current_file.position = 0;
 	current_file.oid = 0;
 	current_file.request = 0;
@@ -131,42 +140,35 @@ int32_t crud_read(int16_t fd, void *buf, int32_t count)
 	//printf("start count:%d \n", count);
 	if(!crud_initialized)
 		crud_init();
-
+	
+	// Declare a new char buffer for use later
 	char tmpBuf[CRUD_MAX_OBJECT_SIZE];
 
 	// TODO For next assignment, we'll have to actually use the file handle for something.
 	// Here we aren't actually using it for anything.
 
+	// Create a request to send to the crud bus
 	CrudRequest req = createRequest(current_file.oid, CRUD_READ, CRUD_MAX_OBJECT_SIZE);
 	CrudResponse res = crud_bus_request(req, tmpBuf);
 	current_file = processResponse(res);
-	//printf("count of bytes to read: %d\n", count);
-
-	//printf("length of file we're reading: %d\n", current_file.length);
-	//printf("position in file before read: %d\n", current_file.position);
-
+	
 	if(current_file.result == 1)
 		return -1;
 
+	// Check to ensure we're not reading off the end of our file
+	if(count+current_file.position > current_file.length)
+		count = current_file.length - current_file.position;
 
 	int i = 0;
-	if(count+current_file.position > current_file.length)
-	{
-		//printf("if statement evaluated as true\n");
-		count = current_file.length - current_file.position;
-		//printf("New count after if: %d\n", count);
-	}
-
+	// Loop through the buffer that we read, assigning each position in it to the buffer
+	// we were passed
 	for( i = current_file.position; i<current_file.position+count; i++)
-	{
 		((char*)buf)[i-current_file.position] = tmpBuf[i];
-	}
 
 	current_file.position+=count;
 	
-	//printf("position in file after read: %d\n", current_file.position);
-	
-	//current_file.length = 0;
+	// Clear all the non-global stuff
+	current_file.length = 0;
 	current_file.flags = 0; 
 	current_file.result = 0;
 	current_file.request = 0;
@@ -197,34 +199,29 @@ int32_t crud_write(int16_t fd, void *buf, int32_t count)
 	if(!crud_initialized)
 		crud_init();
 	
-	//printf("count: %d\n", count);
-
 	// Given the fild handle, find it's OID and read the data from the store
 	CrudRequest req = createRequest(current_file.oid, CRUD_READ, CRUD_MAX_OBJECT_SIZE);
 	CrudResponse res = crud_bus_request(req, tmpBuf);
 	current_file = processResponse(res);
-	//TODO delete non global values from current_file
 
 	if(current_file.result == 1)
 		return -1;
 
-	// Does not account for when the file is already the max object length
+	// Ensures that we're not writing off the end of our file.
+	// If the count goes past the file length, we reassign our file length
+	// to the count + our current position. And then create a file of that
+	// size. After we delete our old file of course.
 	if(count+current_file.position > current_file.length)
 	{
-		//printf("File write size reassignment occurred\n");
 		int32_t length = count+current_file.position;
 		if(length>CRUD_MAX_OBJECT_SIZE)
 			length = CRUD_MAX_OBJECT_SIZE;
-
-		//printf("length: %d\n", length);
 
 		req = createRequest(current_file.oid, CRUD_DELETE, current_file.length);
 		int32_t tmpPos = current_file.position;
 
 		crud_close(current_file.handle);
 		crud_bus_request(req, NULL);
-
-		//printf("count: %d\n", count);
 
 		req = createRequest(0, CRUD_CREATE, length);
 		res = crud_bus_request(req, tmpBuf);
@@ -235,20 +232,23 @@ int32_t crud_write(int16_t fd, void *buf, int32_t count)
 		current_file.position = tmpPos;
 	}
 	
+	// Loop through, assigning positions in our temp buffer to positions in our 
+	// passed buffer.
 	int i = 0;
 	for( i = 0; i<count; i++)
 	{
 		tmpBuf[current_file.position+i] = ((unsigned char*)buf)[i];
 	}
 
+	// Update our file with the temporary buffer
 	req = createRequest(current_file.oid, CRUD_UPDATE, current_file.length);
 	res = crud_bus_request(req, tmpBuf);
 	current_file = processResponse(res);
 	
+	// Update our position
 	current_file.position+=count;
 
-	//printf("Position at the end of write: %d\n", current_file.position);
-
+	// Delete all the non-global shit
 	current_file.length = 0;
 	current_file.flags = 0; 
 	current_file.result = 0;
@@ -272,10 +272,20 @@ int32_t crud_seek(int16_t fd, uint32_t loc)
 
 	if(!crud_initialized)
 		crud_init();
-	
+
+	// Seek to the shit
 	current_file.position = (int32_t)loc;
 	return 0;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////
+//
+// Function     : crud_init
+// Description  : initialize the crud store
+//
+// Inputs       : Nothin!
+// Outputs      : Nothin! void.
 
 void crud_init()
 {
@@ -288,11 +298,21 @@ void crud_init()
 	if(!file.result)
 	{
 		//TODO write some log and error stuff here
+		return;
 	}
 
 	crud_initialized = 1;
 }
 
+////////////////////////////////////////////////////////////////////////////////
+//
+// Function     : createRequest
+// Description  : Pretty self explanatory. Simply creates a 64bit request to be
+// 		  passed on to the object store
+//
+// Inputs       : 32 bit OID integer, 8bit request integer, and 32bit length integer
+//
+// Outputs      : 0 if successful or -1 if failure
 CrudRequest createRequest(int32_t oid, int8_t request, int32_t length)
 {
 	CrudRequest req = 0;
@@ -300,19 +320,28 @@ CrudRequest createRequest(int32_t oid, int8_t request, int32_t length)
 	// Add the 32 bits of oid to the 64 least significant bits of req
 	req+= oid;
 	req<<=4;
-
+	// Add the however many from the request and length
 	req+= (15 & request);
 	req<<=24;
 
 	req+= (16777215 & length);
 	req<<=3;
 
-	//TODO confirm that we don't actually need to use flags or result bits in any requests
 	req<<=1;
 	
 	return req;
 }
 
+////////////////////////////////////////////////////////////////////////////////
+//
+// Function     : processResponse
+// Description  : does all the bitshifting and other bullshit involved in taking 
+// 		  a 64bit response and separating its parts out
+//
+// Inputs       : A response in the form of the CrudResponse struct provided in the 
+// 		  driver or whatever
+//
+// Outputs      : A file struct 
 file_st processResponse(CrudResponse res)
 {
 	/* TODO
@@ -353,6 +382,13 @@ file_st processResponse(CrudResponse res)
 	return file;
 }
 
+////////////////////////////////////////////////////////////////////////////////
+//
+// Function     : getNewHandle
+// Description  : Gets the next file handle
+//
+// Inputs       : Nothin!
+// Outputs      : Returns the next available file handle
 int16_t getNewHandle()
 {
 	return current_handle+=1;
