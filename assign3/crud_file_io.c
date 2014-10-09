@@ -4,7 +4,7 @@
 //  Description    : This is the implementation of the standardized IO functions
 //                   for used to access the CRUD storage system.
 //
-//  Author         : Patrick McDaniel
+//  Author         : John Walter Stockwell
 //  Last Modified  : Tue Sep 16 19:38:42 EDT 2014
 //
 
@@ -18,15 +18,6 @@
 #include <cmpsc311_log.h>
 #include <cmpsc311_util.h>
 
-/*Basic summary of bullshit:
- * -Interaction with crud interface is based on methods defined in crud_driver.h
- * -This interface contains a single function call with two arguments
- *  64-bit CRUD bus request value (type CrudRequest)
- *  a pointer to a variable-sized buffer
- *  CrudResponse crud_bus_request(CrudRequest request, void *buf);
- *  */
-
-
 // Defines 
 #define CIO_UNIT_TEST_MAX_WRITE_SIZE 1024
 #define CRUD_IO_UNIT_TEST_ITERATIONS 10240
@@ -34,20 +25,22 @@
 
 int8_t crud_initialized = 0;
 int16_t current_handle = FILE_HANDLE_BASE_VALUE;
-int32_t current_position = 0;
 
 // File structure.
 // May in future become useful in keeping track of a shitload of concurrent files
 typedef struct 
 {
-	//TODO find out if we have to remove any of this stuff to comply with what we're keeping track of
+	// After exitting functions, we can only hold the file descriptor, position, and OID
 	int32_t oid;
-	int8_t request;
-	int32_t length;
-	int8_t flags;
-	int8_t result;
-	int16_t file_handle; // Known as fd in most functions
+	int8_t request; // Non-global
+	int32_t length; // Non-global
+	int8_t flags; // Non-global
+	int8_t result; // Non-global
+	int32_t position;
+	int16_t handle; // Known as fd in most functions
 } file_st;
+
+//TODO Should possibly include an implementation here for a linked list for later
 
 file_st current_file = { 0, 0, 0, 0, 0, 0 };
 
@@ -60,13 +53,10 @@ typedef enum
     CIO_UNIT_TEST_SEEK   = 3,
 } CRUD_UNIT_TEST_TYPE;
 
-
+// Prototypes
 CrudRequest createRequest(int32_t oid, int8_t request, int32_t length);
-
 file_st processResponse(CrudResponse res);
-
 int16_t getNewHandle();
-
 void crud_init();
 
 // Implementation
@@ -78,29 +68,30 @@ void crud_init();
 //
 // Inputs       : path - the path "in the storage array"
 // Outputs      : file handle if successful, -1 if failure
-// make an association between path and a file handle
-// Literally all we're doing is returning an integer that is our file handle
-// once returned, all context shit relating to the position in the file can disappear. this is done by close
+
 int16_t crud_open(char *path) 
-{
+{	// Ensure that crud is initialized
 	if(!crud_initialized)
 		crud_init();
 	
+	// Create our request
 	CrudRequest req = createRequest(0, CRUD_CREATE, 0);
+	// Send the request to the data store
 	CrudResponse res = crud_bus_request(req, NULL);
-	file_st file = processResponse(res);
-
-	current_file = file;
-	current_position = 0;
-	//printf("1crud_open \n");
+	// Process the response
+	current_file = processResponse(res);
+	// Check that the response did not include a failure
 	if(current_file.result == 1)
 		return -1;
-	//printf("2crud_open \n");
-
-	current_file.file_handle = getNewHandle();
-	//printf("3crud_open \n");
 	
-	return current_file.file_handle;
+	current_file.handle = getNewHandle();
+
+	current_file.length = 0;
+	current_file.flags = 0; 
+	current_file.result = 0;
+	current_file.request = 0;
+
+	return current_file.handle;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -113,13 +104,13 @@ int16_t crud_open(char *path)
 
 int16_t crud_close(int16_t fh) 
 {
-	current_position = 0;
+	current_file.position = 0;
 	current_file.oid = 0;
 	current_file.request = 0;
 	current_file.length = 0;
 	current_file.result = 0;
 	current_file.flags = 0;
-	current_file.file_handle = 0;
+	current_file.handle = 0;
 
 	return 0;
 }
@@ -143,33 +134,43 @@ int32_t crud_read(int16_t fd, void *buf, int32_t count)
 
 	char tmpBuf[CRUD_MAX_OBJECT_SIZE];
 
-	// TODO find out if we actually need to use the file handle here for anything.
-	// Should we check if the current_file is initialized at all?
-	// If not, should we initialize a file with the given file handle?
-	//if(fd != current_file.file_handle)
-	
+	// TODO For next assignment, we'll have to actually use the file handle for something.
+	// Here we aren't actually using it for anything.
+
 	CrudRequest req = createRequest(current_file.oid, CRUD_READ, CRUD_MAX_OBJECT_SIZE);
 	CrudResponse res = crud_bus_request(req, tmpBuf);
-	file_st file = processResponse(res);
+	current_file = processResponse(res);
+	//printf("count of bytes to read: %d\n", count);
 
-	if(file.result == 1)
+	//printf("length of file we're reading: %d\n", current_file.length);
+	//printf("position in file before read: %d\n", current_file.position);
+
+	if(current_file.result == 1)
 		return -1;
 
 
 	int i = 0;
-	if(count+current_position > current_file.length)
-		count = current_file.length - current_position;
-
-	for( i = current_position; i<current_position+count; i++)
+	if(count+current_file.position > current_file.length)
 	{
-		// TODO unsure of this
-		//tmpBuf[i-current_position] = ((char*)buf)[i];
-		((char*)buf)[i-current_position] = tmpBuf[i];
+		//printf("if statement evaluated as true\n");
+		count = current_file.length - current_file.position;
+		//printf("New count after if: %d\n", count);
 	}
 
-	current_position+=count;
-	//buf = &tmpBuf[0];
-	//printf("end count:%d \n", count);
+	for( i = current_file.position; i<current_file.position+count; i++)
+	{
+		((char*)buf)[i-current_file.position] = tmpBuf[i];
+	}
+
+	current_file.position+=count;
+	
+	//printf("position in file after read: %d\n", current_file.position);
+	
+	//current_file.length = 0;
+	current_file.flags = 0; 
+	current_file.result = 0;
+	current_file.request = 0;
+
 	return count;
 }
 
@@ -188,42 +189,42 @@ int32_t crud_read(int16_t fd, void *buf, int32_t count)
 //
 int32_t crud_write(int16_t fd, void *buf, int32_t count) 
 {
-	// Add some number of bytes to the front of the file 
 	// If count is past current end of file, write over the end of the file
 
 	// Find file in heap that we're writing to.
-	
-	// TODO we aren't supposed to maintain any file content or length information in 
-	// local structures. Find out if this applies to the file length returned in 
-	// responses.
 	
 	char tmpBuf[CRUD_MAX_OBJECT_SIZE];
 	if(!crud_initialized)
 		crud_init();
 	
+	//printf("count: %d\n", count);
+
 	// Given the fild handle, find it's OID and read the data from the store
 	CrudRequest req = createRequest(current_file.oid, CRUD_READ, CRUD_MAX_OBJECT_SIZE);
 	CrudResponse res = crud_bus_request(req, tmpBuf);
-	file_st file_to_update = processResponse(res);
-	current_file = file_to_update;
+	current_file = processResponse(res);
+	//TODO delete non global values from current_file
 
-	if(file_to_update.result == 1)
+	if(current_file.result == 1)
 		return -1;
 
 	// Does not account for when the file is already the max object length
-	if(count+current_position > current_file.length)
+	if(count+current_file.position > current_file.length)
 	{
 		//printf("File write size reassignment occurred\n");
-		// Delete the file, and then create a new file of max size
-		int32_t length = count+current_position;
+		int32_t length = count+current_file.position;
 		if(length>CRUD_MAX_OBJECT_SIZE)
 			length = CRUD_MAX_OBJECT_SIZE;
 
-		req = createRequest(current_file.oid, CRUD_DELETE, current_file.length);
-		int32_t tmpPos = current_position;
+		//printf("length: %d\n", length);
 
-		crud_close(current_file.file_handle);
+		req = createRequest(current_file.oid, CRUD_DELETE, current_file.length);
+		int32_t tmpPos = current_file.position;
+
+		crud_close(current_file.handle);
 		crud_bus_request(req, NULL);
+
+		//printf("count: %d\n", count);
 
 		req = createRequest(0, CRUD_CREATE, length);
 		res = crud_bus_request(req, tmpBuf);
@@ -231,22 +232,27 @@ int32_t crud_write(int16_t fd, void *buf, int32_t count)
 
 		current_file = new_file;
 
-		current_position = tmpPos;
+		current_file.position = tmpPos;
 	}
 	
 	int i = 0;
 	for( i = 0; i<count; i++)
 	{
-		tmpBuf[current_position+i] = ((unsigned char*)buf)[i];
+		tmpBuf[current_file.position+i] = ((unsigned char*)buf)[i];
 	}
 
 	req = createRequest(current_file.oid, CRUD_UPDATE, current_file.length);
 	res = crud_bus_request(req, tmpBuf);
-	file_to_update = processResponse(res);
+	current_file = processResponse(res);
 	
-	current_file = file_to_update;
+	current_file.position+=count;
 
-	current_position+=count;
+	//printf("Position at the end of write: %d\n", current_file.position);
+
+	current_file.length = 0;
+	current_file.flags = 0; 
+	current_file.result = 0;
+	current_file.request = 0;
 
 	return count;
 }
@@ -267,7 +273,7 @@ int32_t crud_seek(int16_t fd, uint32_t loc)
 	if(!crud_initialized)
 		crud_init();
 	
-	current_position = (int32_t)loc;
+	current_file.position = (int32_t)loc;
 	return 0;
 }
 
@@ -303,13 +309,10 @@ CrudRequest createRequest(int32_t oid, int8_t request, int32_t length)
 
 	//TODO confirm that we don't actually need to use flags or result bits in any requests
 	req<<=1;
-
+	
 	return req;
 }
 
-// TODO we aren't supposed to maintain any file content or length information in 
-// local structures. Find out if this applies to the file length returned in 
-// responses.
 file_st processResponse(CrudResponse res)
 {
 	/* TODO
@@ -342,8 +345,10 @@ file_st processResponse(CrudResponse res)
 	//printf("oid:%u\n",file.oid);
 
 	// Get the file handle
-	file.file_handle = getNewHandle();
-	//printf("file_handle:%u\n",file.file_handle);
+	file.handle = getNewHandle();
+	//printf("handle:%u\n",file.handle);
+
+	file.position = current_file.position;
 
 	return file;
 }
@@ -353,7 +358,6 @@ int16_t getNewHandle()
 	return current_handle+=1;
 }
 
-// Sit down, and look through interface to see how reads, writes and whatever else does what it does.
 // Unit Test Function
 
 ////////////////////////////////////////////////////////////////////////////////
