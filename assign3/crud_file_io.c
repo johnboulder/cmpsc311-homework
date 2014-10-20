@@ -298,7 +298,7 @@ void crud_init()
 	if(!file.result)
 	{
 		//TODO write some log and error stuff here
-		return;
+		//return;
 	}
 
 	crud_initialized = 1;
