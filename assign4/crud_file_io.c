@@ -66,7 +66,7 @@ typedef enum {
 
 // File system Static Data
 // This the definition of the file table
-CrudFileAllocationType crud_file_table[CRUD_MAX_TOTAL_FILES]; // The file handle table
+CrudFileAllocationType crud_file_table[CRUD_MAX_TOTAL_FILES] = {[0 ... CRUD_MAX_TOTAL_FILES-1] = {"",0,0,0,0} }; // The file handle table
 
 // Pick up these definitions from the unit test of the crud driver
 CrudRequest construct_crud_request(CrudOID oid, CRUD_REQUEST_TYPES req, uint32_t length, uint8_t flags, uint8_t res);
@@ -221,6 +221,9 @@ uint16_t crud_unmount(void) {
 // Inputs       : path - the path "in the storage array"
 // Outputs      : file handle if successful, -1 if failure
 
+// TODO apparently this function has to handle to opening of existing files.
+// How is it proposed that we do that considering that we need the file handle to
+// see if the file exists in the file_table?
 int16_t crud_open(char *path) 
 {	
 	// Ensure that crud is initialized
@@ -248,7 +251,9 @@ int16_t crud_open(char *path)
 	// TODO make sure this is actually ok, this is dangerous considering
 	// that the value of path will likely change in the test
 	*(file.filename) = *path;
+	
 	file.open = 1;
+	file.position = 0;
 
 	crud_file_table[local_file.handle] = file;
 
@@ -270,7 +275,7 @@ int16_t crud_close(int16_t fh)
 	// Only thing we set to zero is the open flag
 	CrudFileAllocationType local_file = crud_file_table[fh];
 	local_file.open = 0;
-	//local_file.position = 0;
+	local_file.position = 0;
 	//local_file.object_id = 0;
 	//local_file.length = 0;
 	//local_file.filename = "";
@@ -315,7 +320,7 @@ int32_t crud_read(int16_t fd, void *buf, int32_t count)
 		return -1;
 
 	// Check to ensure we're not reading off the end of our file
-	if(count+local_file.position >= local_file.length)
+	if(count+local_file.position > local_file.length)
 		count = local_file.length - local_file.position;
 
 	int i = 0;
@@ -352,11 +357,8 @@ int32_t crud_read(int16_t fd, void *buf, int32_t count)
 //
 int32_t crud_write(int16_t fd, void *buf, int32_t count) 
 {
-	// If count is past current end of file, write over the end of the file
-
-	// Find file in heap that we're writing to.
-	
 	char tmpBuf[CRUD_MAX_OBJECT_SIZE];
+	
 	if(!crud_initialized)
 		crud_init();
 	
@@ -383,10 +385,12 @@ int32_t crud_write(int16_t fd, void *buf, int32_t count)
 		if(length>CRUD_MAX_OBJECT_SIZE)
 			length = CRUD_MAX_OBJECT_SIZE;
 
+		printf("length:%d\n",length);
+
 		req = createRequest(local_file.oid, CRUD_DELETE, local_file.length, 0);
 		int32_t tmpPos = local_file.position;
 
-		crud_close(local_file.handle);
+		//crud_close(local_file.handle);
 		crud_bus_request(req, NULL);
 
 		req = createRequest(0, CRUD_CREATE, length, 0);
@@ -403,21 +407,30 @@ int32_t crud_write(int16_t fd, void *buf, int32_t count)
 	
 	// Loop through, assigning positions in our temp buffer to positions in our 
 	// passed buffer.
+	
+	//printf("write position2.5: %d\n", local_file.position);
+
 	int i = 0;
 	for( i = 0; i<count; i++)
 	{
 		tmpBuf[local_file.position+i] = ((unsigned char*)buf)[i];
 	}
 
+	int32_t tmpPos = local_file.position;
 	// Update our file with the temporary buffer
 	req = createRequest(local_file.oid, CRUD_UPDATE, local_file.length, 0);
 	res = crud_bus_request(req, tmpBuf);
 	local_file = processResponse(res);
+	local_file.position = tmpPos;
 	
+	//printf("write position2.75: %d\n", local_file.position);
 	//TODO on updates, should our position be changed to the position we update to?
 
 	// Update our position
 	local_file.position+=count;
+
+	printf("write position2: %d\n", local_file.position);
+
 
 	CrudFileAllocationType file = convertToCrudFileType(local_file);
 	*(file.filename) = *(current_file.filename);
@@ -558,7 +571,7 @@ file_st processResponse(CrudResponse res)
 	file.handle = getNewHandle();
 	//printf("handle:%u\n",file.handle);
 
-	//file.position = local_file.position;
+	file.position = 0;
 
 	return file;
 }
