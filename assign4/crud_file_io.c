@@ -154,14 +154,15 @@ uint16_t crud_mount(void) {
 	if(local_file.result == 1)
 		return -1;
 
-	*crud_file_table = *buf;
+	//*crud_file_table = *buf;
 	
-	//int i = 0; 
+	int i = 0; 
 
-	//for(i = 0; i<CRUD_MAX_TOTAL_FILES; i++)
-	//{
-	//	printf("element:%d position:%d \n", i, crud_file_table[i].position);
-	//}
+	for(i = 0; i<CRUD_MAX_TOTAL_FILES; i++)
+	{
+		crud_file_table[i] = buf[i];
+		//printf("element:%d position:%d \n", i, crud_file_table[i].position);
+	}
 
 	// Log, return successfully
 	logMessage(LOG_INFO_LEVEL, "... mount complete.");
@@ -183,17 +184,22 @@ uint16_t crud_unmount(void) {
 		crud_init();
 	
 	// TODO CRUD_MAX_OBJECT_SIZE, or CRUD_MAX_TOTAL_FILES?
-	CrudRequest req = createRequest(0, CRUD_DELETE, CRUD_MAX_TOTAL_FILES, CRUD_PRIORITY_OBJECT);
-	CrudResponse res = crud_bus_request(req, NULL);
-	file_st local_file = processResponse(res);
+	//CrudRequest req = createRequest(0, CRUD_DELETE, CRUD_MAX_TOTAL_FILES, CRUD_PRIORITY_OBJECT);
+	//CrudResponse res = crud_bus_request(req, NULL);
+	//file_st local_file = processResponse(res);
 	
-	if(local_file.result == 1)
-		return -1;
-	
+	//if(local_file.result == 1)
+		//return -1;
+	//int i = 0;
+	//for(i = 0; i<CRUD_MAX_TOTAL_FILES; i++)
+	//{
+	//	printf(crud_file_table[i]);
+	//}
+
 	// CRUD_CREATE - write a new array to the object
-	req = createRequest(0, CRUD_CREATE, CRUD_MAX_TOTAL_FILES, CRUD_PRIORITY_OBJECT);
-	res = crud_bus_request(req, crud_file_table);
-	local_file = processResponse(res);
+	CrudRequest req = createRequest(0, CRUD_UPDATE, CRUD_MAX_TOTAL_FILES, CRUD_PRIORITY_OBJECT);
+	CrudResponse res = crud_bus_request(req, crud_file_table);
+	file_st local_file = processResponse(res);
 	
 	if(local_file.result == 1)
 		return -1;
@@ -202,7 +208,7 @@ uint16_t crud_unmount(void) {
 	req = createRequest(0, CRUD_CLOSE, 0, 0);
 	res = crud_bus_request(req, crud_file_table);
 	local_file = processResponse(res);
-	
+
 	if(local_file.result == 1)
 		return -1;
 
@@ -229,6 +235,16 @@ int16_t crud_open(char *path)
 	// Ensure that crud is initialized
 	if(!crud_initialized)
 		crud_init();
+
+	int16_t i = 0;
+	for(i = 0; i<CRUD_MAX_TOTAL_FILES; i++)
+	{
+		if(*(crud_file_table[i].filename) == *path)
+		{
+			crud_file_table[i].open = 1;
+			return i;
+		}
+	}
 
 	// Create our request
 	CrudRequest req = createRequest(0, CRUD_CREATE, 0, 0);
@@ -274,8 +290,8 @@ int16_t crud_close(int16_t fh)
 {
 	// Only thing we set to zero is the open flag
 	CrudFileAllocationType local_file = crud_file_table[fh];
-	local_file.open = 0;
-	local_file.position = 0;
+	//local_file.open = 0;
+	//local_file.position = 0;
 	//local_file.object_id = 0;
 	//local_file.length = 0;
 	//local_file.filename = "";
@@ -297,14 +313,15 @@ int16_t crud_close(int16_t fh)
 
 int32_t crud_read(int16_t fd, void *buf, int32_t count) 
 {
-	printf("start count:%d \n", count);
+	//printf("start count:%d \n", count);
 	if(!crud_initialized)
 		crud_init();
+
 	// Grab the file from the file table using the file handle
 	CrudFileAllocationType current_file = crud_file_table[fd];
 
 	// Declare a new char buffer for use later
-	char tmpBuf[CRUD_MAX_OBJECT_SIZE];
+	unsigned char tmpBuf[CRUD_MAX_OBJECT_SIZE];
 
 	// Create a request to send to the crud bus
 	CrudRequest req = createRequest(current_file.object_id, CRUD_READ, CRUD_MAX_OBJECT_SIZE, 0);
@@ -314,7 +331,6 @@ int32_t crud_read(int16_t fd, void *buf, int32_t count)
 	/*IMPORTANT CHANGE FROM PREVIOUS VERSION*/
 	local_file.position = current_file.position;
 	
-	printf("read position1: %d\n", local_file.position);
 
 	if(local_file.result == 1)
 		return -1;
@@ -334,10 +350,7 @@ int32_t crud_read(int16_t fd, void *buf, int32_t count)
 	CrudFileAllocationType file = convertToCrudFileType(local_file);
 	*(file.filename) = *(crud_file_table[fd].filename);
 
-	printf("read position1: %d\n", local_file.position);
-
 	crud_file_table[fd] = file;
-	printf("end count:%d \n", count);
 	
 	return count;
 }
@@ -370,7 +383,6 @@ int32_t crud_write(int16_t fd, void *buf, int32_t count)
 	file_st local_file = processResponse(res);
 
 	local_file.position = current_file.position;
-	printf("write position1: %d\n", local_file.position);
 
 	if(local_file.result == 1)
 		return -1;
@@ -385,7 +397,7 @@ int32_t crud_write(int16_t fd, void *buf, int32_t count)
 		if(length>CRUD_MAX_OBJECT_SIZE)
 			length = CRUD_MAX_OBJECT_SIZE;
 
-		printf("length:%d\n",length);
+		//printf("length:%d\n",length);
 
 		req = createRequest(local_file.oid, CRUD_DELETE, local_file.length, 0);
 		int32_t tmpPos = local_file.position;
@@ -400,16 +412,11 @@ int32_t crud_write(int16_t fd, void *buf, int32_t count)
 		local_file = new_file;
 
 		local_file.position = tmpPos;
-		
-		printf("write position2: %d\n", local_file.position);
-		
 	}
 	
 	// Loop through, assigning positions in our temp buffer to positions in our 
 	// passed buffer.
 	
-	//printf("write position2.5: %d\n", local_file.position);
-
 	int i = 0;
 	for( i = 0; i<count; i++)
 	{
@@ -422,20 +429,20 @@ int32_t crud_write(int16_t fd, void *buf, int32_t count)
 	res = crud_bus_request(req, tmpBuf);
 	local_file = processResponse(res);
 	local_file.position = tmpPos;
-	
+	//printf("%s\n", (char*)buf);
 	//printf("write position2.75: %d\n", local_file.position);
 	//TODO on updates, should our position be changed to the position we update to?
 
 	// Update our position
 	local_file.position+=count;
 
-	printf("write position2: %d\n", local_file.position);
+	//printf("write position2: %d\n", local_file.position);
 
 
 	CrudFileAllocationType file = convertToCrudFileType(local_file);
 	*(file.filename) = *(current_file.filename);
 
-	printf("write position3: %d\n", local_file.position);
+	//printf("write position3: %d\n", local_file.position);
 
 	crud_file_table[fd] = file;
 
