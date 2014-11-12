@@ -66,7 +66,7 @@ typedef enum {
 
 // File system Static Data
 // This the definition of the file table
-CrudFileAllocationType crud_file_table[CRUD_MAX_TOTAL_FILES] = {[0 ... CRUD_MAX_TOTAL_FILES-1] = {"",0,0,0,0} }; // The file handle table
+CrudFileAllocationType crud_file_table[CRUD_MAX_TOTAL_FILES];//= {[0 ... CRUD_MAX_TOTAL_FILES-1] = {"",0,0,0,0} }; // The file handle table
 
 // Pick up these definitions from the unit test of the crud driver
 CrudRequest construct_crud_request(CrudOID oid, CRUD_REQUEST_TYPES req, uint32_t length, uint8_t flags, uint8_t res);
@@ -236,10 +236,14 @@ int16_t crud_open(char *path)
 	if(!crud_initialized)
 		crud_init();
 
+	//printf("PATH NAME: %s\n", path);
 	int16_t i = 0;
-	for(i = 0; i<CRUD_MAX_TOTAL_FILES; i++)
+	for(i = 0; i<=CRUD_MAX_TOTAL_FILES; i++)
 	{
-		if(*(crud_file_table[i].filename) == *path)
+		//char tmp[40];
+		//strcpy(tmp, crud_file_table[i].filename);
+		//printf("tmp: %s\n", tmp);
+		if(strcmp(crud_file_table[i].filename, path) == 0)
 		{
 			crud_file_table[i].open = 1;
 			return i;
@@ -266,7 +270,7 @@ int16_t crud_open(char *path)
 	file = convertToCrudFileType(local_file);
 	// TODO make sure this is actually ok, this is dangerous considering
 	// that the value of path will likely change in the test
-	*(file.filename) = *path;
+	strcpy(file.filename, path);
 	
 	file.open = 1;
 	file.position = 0;
@@ -274,7 +278,7 @@ int16_t crud_open(char *path)
 	crud_file_table[local_file.handle] = file;
 
 	//logMessage(LOG_INFO_LEVEL, "... open %s complete", *(file.filename));
-
+	printf("filename: %s\n", crud_file_table[local_file.handle].filename);
 	return local_file.handle;
 }
 
@@ -290,7 +294,7 @@ int16_t crud_close(int16_t fh)
 {
 	// Only thing we set to zero is the open flag
 	CrudFileAllocationType local_file = crud_file_table[fh];
-	//local_file.open = 0;
+	local_file.open = 0;
 	//local_file.position = 0;
 	//local_file.object_id = 0;
 	//local_file.length = 0;
@@ -320,6 +324,9 @@ int32_t crud_read(int16_t fd, void *buf, int32_t count)
 	// Grab the file from the file table using the file handle
 	CrudFileAllocationType current_file = crud_file_table[fd];
 
+	if(!current_file.open)
+		return 0;
+
 	// Declare a new char buffer for use later
 	unsigned char tmpBuf[CRUD_MAX_OBJECT_SIZE];
 
@@ -348,8 +355,8 @@ int32_t crud_read(int16_t fd, void *buf, int32_t count)
 	local_file.position+=count;
 
 	CrudFileAllocationType file = convertToCrudFileType(local_file);
-	*(file.filename) = *(crud_file_table[fd].filename);
-
+	strcpy(file.filename, crud_file_table[fd].filename);
+	printf("filename: %s\n oid: %d\n pos: %d\n leng: %d\n open: %d\n", file.filename, file.object_id, file.position, file.length, file.open);
 	crud_file_table[fd] = file;
 	
 	return count;
@@ -376,6 +383,9 @@ int32_t crud_write(int16_t fd, void *buf, int32_t count)
 		crud_init();
 	
 	CrudFileAllocationType current_file = crud_file_table[fd];
+
+	if(!current_file.open)
+		return 0;
 
 	// Given the fild handle, find it's OID and read the data from the store
 	CrudRequest req = createRequest(current_file.object_id, CRUD_READ, CRUD_MAX_OBJECT_SIZE, 0);
@@ -440,7 +450,7 @@ int32_t crud_write(int16_t fd, void *buf, int32_t count)
 
 
 	CrudFileAllocationType file = convertToCrudFileType(local_file);
-	*(file.filename) = *(current_file.filename);
+	strcpy(file.filename, current_file.filename);
 
 	//printf("write position3: %d\n", local_file.position);
 
@@ -464,6 +474,9 @@ int32_t crud_seek(int16_t fd, uint32_t loc)
 		crud_init();
 
 	CrudFileAllocationType local_file = crud_file_table[fd];
+
+	if(!local_file.open)
+		return -1;
 
 	// Seek to the shit
 	local_file.position = (int32_t)loc;
