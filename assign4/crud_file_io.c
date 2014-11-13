@@ -40,6 +40,10 @@ typedef struct
 	int16_t handle; // Known as fd in most functions
 } file_st;
 
+//const FILE *outputFile = fopen("output.txt","w+");
+
+
+
 //CrudFileAllocationType local_file= {"", 0, 0, 0, 0};
 
 /* Prototypes for some extra helper functions at the bottom of this class.
@@ -101,8 +105,8 @@ uint16_t crud_format(void) {
 		return -1;
 
 	CrudFileAllocationType new_table[CRUD_MAX_TOTAL_FILES]= {[0 ... CRUD_MAX_TOTAL_FILES-1] = {"",0,0,0,0} };
-	*crud_file_table = *new_table;
-
+	memcpy(crud_file_table, new_table, sizeof(CrudFileAllocationType) * CRUD_MAX_TOTAL_FILES);
+	
 	//int i = 0; 
 
 	//for(i = 0; i<CRUD_MAX_TOTAL_FILES; i++)
@@ -155,14 +159,14 @@ uint16_t crud_mount(void) {
 		return -1;
 
 	//*crud_file_table = *buf;
-	
-	int i = 0; 
+	memcpy(crud_file_table, buf, sizeof(CrudFileAllocationType) * CRUD_MAX_TOTAL_FILES);
+	//int i = 0; 
 
-	for(i = 0; i<CRUD_MAX_TOTAL_FILES; i++)
-	{
-		crud_file_table[i] = buf[i];
-		//printf("element:%d position:%d \n", i, crud_file_table[i].position);
-	}
+	//for(i = 0; i<CRUD_MAX_TOTAL_FILES; i++)
+	//{
+		//crud_file_table[i] = buf[i];
+	//	printf("element:%d position:%d \n", i, crud_file_table[i].position);
+	//}
 
 	// Log, return successfully
 	logMessage(LOG_INFO_LEVEL, "... mount complete.");
@@ -227,9 +231,6 @@ uint16_t crud_unmount(void) {
 // Inputs       : path - the path "in the storage array"
 // Outputs      : file handle if successful, -1 if failure
 
-// TODO apparently this function has to handle to opening of existing files.
-// How is it proposed that we do that considering that we need the file handle to
-// see if the file exists in the file_table?
 int16_t crud_open(char *path) 
 {	
 	// Ensure that crud is initialized
@@ -246,6 +247,7 @@ int16_t crud_open(char *path)
 		if(strcmp(crud_file_table[i].filename, path) == 0)
 		{
 			crud_file_table[i].open = 1;
+			crud_file_table[i].position = 0;
 			return i;
 		}
 	}
@@ -293,13 +295,9 @@ int16_t crud_open(char *path)
 int16_t crud_close(int16_t fh) 
 {
 	// Only thing we set to zero is the open flag
-	CrudFileAllocationType local_file = crud_file_table[fh];
-	local_file.open = 0;
-	//local_file.position = 0;
-	//local_file.object_id = 0;
-	//local_file.length = 0;
-	//local_file.filename = "";
-	crud_file_table[fh] = local_file;
+	crud_file_table[fh].open = 0;
+
+	//fclose(outputFile);
 
 	return 0;
 }
@@ -325,7 +323,7 @@ int32_t crud_read(int16_t fd, void *buf, int32_t count)
 	CrudFileAllocationType current_file = crud_file_table[fd];
 
 	if(!current_file.open)
-		return 0;
+		return -1;
 
 	// Declare a new char buffer for use later
 	unsigned char tmpBuf[CRUD_MAX_OBJECT_SIZE];
@@ -350,13 +348,13 @@ int32_t crud_read(int16_t fd, void *buf, int32_t count)
 	// Loop through the buffer that we read, assigning each position in it to the buffer
 	// we were passed
 	for( i = local_file.position; i<local_file.position+count; i++)
-		((char*)buf)[i-local_file.position] = tmpBuf[i];
+		((unsigned char*)buf)[i-local_file.position] = tmpBuf[i];
 
 	local_file.position+=count;
 
 	CrudFileAllocationType file = convertToCrudFileType(local_file);
 	strcpy(file.filename, crud_file_table[fd].filename);
-	printf("filename: %s\n oid: %d\n pos: %d\n leng: %d\n open: %d\n", file.filename, file.object_id, file.position, file.length, file.open);
+	//printf("filename: %s\n oid: %d\n pos: %d\n leng: %d\n open: %d\n", file.filename, file.object_id, file.position, file.length, file.open);
 	crud_file_table[fd] = file;
 	
 	return count;
@@ -377,7 +375,7 @@ int32_t crud_read(int16_t fd, void *buf, int32_t count)
 //
 int32_t crud_write(int16_t fd, void *buf, int32_t count) 
 {
-	char tmpBuf[CRUD_MAX_OBJECT_SIZE];
+	unsigned char tmpBuf[CRUD_MAX_OBJECT_SIZE];
 	
 	if(!crud_initialized)
 		crud_init();
@@ -385,7 +383,7 @@ int32_t crud_write(int16_t fd, void *buf, int32_t count)
 	CrudFileAllocationType current_file = crud_file_table[fd];
 
 	if(!current_file.open)
-		return 0;
+		return -1;
 
 	// Given the fild handle, find it's OID and read the data from the store
 	CrudRequest req = createRequest(current_file.object_id, CRUD_READ, CRUD_MAX_OBJECT_SIZE, 0);
@@ -432,14 +430,21 @@ int32_t crud_write(int16_t fd, void *buf, int32_t count)
 	{
 		tmpBuf[local_file.position+i] = ((unsigned char*)buf)[i];
 	}
-
 	int32_t tmpPos = local_file.position;
 	// Update our file with the temporary buffer
 	req = createRequest(local_file.oid, CRUD_UPDATE, local_file.length, 0);
 	res = crud_bus_request(req, tmpBuf);
 	local_file = processResponse(res);
 	local_file.position = tmpPos;
-	//printf("%s\n", (char*)buf);
+	
+	//if(strcmp(current_file.filename, "raven.txt") == 0)
+	//{
+	//	printf("%s\n", (char*)buf);
+	//	printf("#######################################################################\n");
+	//	printf("%s\n", tmpBuf);
+	//	printf("#######################################################################\n");
+	//}
+	
 	//printf("write position2.75: %d\n", local_file.position);
 	//TODO on updates, should our position be changed to the position we update to?
 
