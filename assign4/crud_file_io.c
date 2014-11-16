@@ -104,7 +104,8 @@ uint16_t crud_format(void) {
 	if(local_file.result == 1)
 		return -1;
 
-	CrudFileAllocationType new_table[CRUD_MAX_TOTAL_FILES]= {[0 ... CRUD_MAX_TOTAL_FILES-1] = {"",0,0,0,0} };
+	CrudFileAllocationType new_table[CRUD_MAX_TOTAL_FILES]= {[0 ... CRUD_MAX_TOTAL_FILES-1] = {"empty",0,0,0,0} };
+
 	memcpy(crud_file_table, new_table, sizeof(CrudFileAllocationType) * CRUD_MAX_TOTAL_FILES);
 	
 	//int i = 0; 
@@ -115,10 +116,12 @@ uint16_t crud_format(void) {
 	//}
 
 	// CRUD_CREATE - write a new array to the object
-	req = createRequest(0, CRUD_CREATE, CRUD_MAX_TOTAL_FILES, CRUD_PRIORITY_OBJECT);
+	req = createRequest(0, CRUD_CREATE, CRUD_MAX_TOTAL_FILES*sizeof(CrudFileAllocationType), CRUD_PRIORITY_OBJECT);
 	res = crud_bus_request(req, crud_file_table);
 	local_file = processResponse(res);
 	
+	current_handle = FILE_HANDLE_BASE_VALUE;
+
 	if(local_file.result == 1)
 		return -1;
 	
@@ -139,14 +142,14 @@ uint16_t crud_format(void) {
 
 uint16_t crud_mount(void) {
 
-	// Ensure that crud is initialized
+	// Ensure that crud is initialize
 	if(!crud_initialized)
 		crud_init();
 
 	CrudFileAllocationType buf[CRUD_MAX_TOTAL_FILES];
 
 	// Create our request CRUD_MAX_OBJECT_SIZE
-	CrudRequest req = createRequest(0, CRUD_READ, CRUD_MAX_TOTAL_FILES, CRUD_PRIORITY_OBJECT);
+	CrudRequest req = createRequest(0, CRUD_READ, CRUD_MAX_TOTAL_FILES*sizeof(CrudFileAllocationType), CRUD_PRIORITY_OBJECT);
 	
 	// Send the request to the data store
 	CrudResponse res = crud_bus_request(req, buf);
@@ -160,6 +163,28 @@ uint16_t crud_mount(void) {
 
 	//*crud_file_table = *buf;
 	memcpy(crud_file_table, buf, sizeof(CrudFileAllocationType) * CRUD_MAX_TOTAL_FILES);
+	
+	//CrudFileAllocationType emptyFile = {"", 0,0,0,0};
+
+	int i = 0; 
+	//for(i = 0; i < CRUD_MAX_TOTAL_FILES;i++)
+	//{
+	//	crud_file_table[i] = emptyFile;
+	//}
+
+	for(i = 0; i < CRUD_MAX_TOTAL_FILES;i++)
+	{
+		crud_file_table[i] = buf[i];
+	}
+
+	i = 0;
+	while(i<CRUD_MAX_TOTAL_FILES && strcmp(crud_file_table[i].filename,"empty"))
+	{
+		i+=1;
+	}
+	current_handle = i;
+
+	//current_handle = (int16_t)sizeof(crud_file_table)//sizeof(CrudFileAllocationType);
 	//int i = 0; 
 
 	//for(i = 0; i<CRUD_MAX_TOTAL_FILES; i++)
@@ -201,7 +226,7 @@ uint16_t crud_unmount(void) {
 	//}
 
 	// CRUD_CREATE - write a new array to the object
-	CrudRequest req = createRequest(0, CRUD_UPDATE, CRUD_MAX_TOTAL_FILES, CRUD_PRIORITY_OBJECT);
+	CrudRequest req = createRequest(0, CRUD_UPDATE, CRUD_MAX_TOTAL_FILES*sizeof(CrudFileAllocationType), CRUD_PRIORITY_OBJECT);
 	CrudResponse res = crud_bus_request(req, crud_file_table);
 	file_st local_file = processResponse(res);
 	
@@ -215,6 +240,15 @@ uint16_t crud_unmount(void) {
 
 	if(local_file.result == 1)
 		return -1;
+	int i = 0;
+	for(i=0; i<CRUD_MAX_TOTAL_FILES; i++)
+	{
+		if((strcmp(crud_file_table[i].filename, "simple.txt") == 0) ||(strcmp(crud_file_table[i].filename, "hamlet.txt") == 0) 
+				||(strcmp(crud_file_table[i].filename, "solitude.txt") == 0) ||(strcmp(crud_file_table[i].filename, "") == 0))
+		{
+			printf("filename: %s handle: %d\n", crud_file_table[i].filename, i);
+		}
+	}
 
 	// Log, return successfully
 	logMessage(LOG_INFO_LEVEL, "... unmount complete.");
@@ -593,7 +627,7 @@ file_st processResponse(CrudResponse res)
 	//printf("oid:%u\n",file.oid);
 
 	// Get the file handle
-	file.handle = getNewHandle();
+	//file.handle = getNewHandle();
 	//printf("handle:%u\n",file.handle);
 
 	file.position = 0;
