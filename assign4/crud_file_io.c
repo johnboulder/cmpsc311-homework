@@ -44,10 +44,10 @@ typedef struct
  * details 
  */
 CrudRequest createRequest(int32_t oid, int8_t request, int32_t length, int8_t flags);
-file_st processResponse(CrudResponse res);
+file_st processResponse(CrudResponse res, int16_t fd);
 int16_t getNewHandle();
 void crud_init();
-CrudFileAllocationType convertToCrudFileType(file_st file);
+CrudFileAllocationType convertToCrudFileType(file_st file, int16_t fd, char* filename);
 
 
 // Type for UNIT test interface
@@ -86,7 +86,7 @@ uint16_t crud_format(void) {
 	// Format the store
 	CrudRequest req = createRequest(0, CRUD_FORMAT, 0, 0);
 	CrudResponse res = crud_bus_request(req, NULL);
-	file_st local_file = processResponse(res);
+	file_st local_file = processResponse(res, -1);
 	
 	// Check that the response did not include a failure
 	if(local_file.result == 1)
@@ -99,7 +99,7 @@ uint16_t crud_format(void) {
 	// Initialize the priority object
 	req = createRequest(0, CRUD_CREATE, CRUD_MAX_TOTAL_FILES*sizeof(CrudFileAllocationType), CRUD_PRIORITY_OBJECT);
 	res = crud_bus_request(req, crud_file_table);
-	local_file = processResponse(res);
+	local_file = processResponse(res, -1);
 	
 	// Zero out the file handle
 	current_handle = FILE_HANDLE_BASE_VALUE;
@@ -133,7 +133,7 @@ uint16_t crud_mount(void) {
 	// Request the priority object from the file store
 	CrudRequest req = createRequest(0, CRUD_READ, CRUD_MAX_TOTAL_FILES*sizeof(CrudFileAllocationType), CRUD_PRIORITY_OBJECT);
 	CrudResponse res = crud_bus_request(req, buf);
-	file_st local_file = processResponse(res);
+	file_st local_file = processResponse(res, -1);
 	
 	// Check that the response did not include a failure
 	if(local_file.result == 1)
@@ -172,7 +172,7 @@ uint16_t crud_unmount(void) {
 	// Update the priority object
 	CrudRequest req = createRequest(0, CRUD_UPDATE, CRUD_MAX_TOTAL_FILES*sizeof(CrudFileAllocationType), CRUD_PRIORITY_OBJECT);
 	CrudResponse res = crud_bus_request(req, crud_file_table);
-	file_st local_file = processResponse(res);
+	file_st local_file = processResponse(res, -1);
 	
 	if(local_file.result == 1)
 		return -1;
@@ -180,7 +180,7 @@ uint16_t crud_unmount(void) {
 	// Close all the shit
 	req = createRequest(0, CRUD_CLOSE, 0, 0);
 	res = crud_bus_request(req, crud_file_table);
-	local_file = processResponse(res);
+	local_file = processResponse(res, -1);
 
 	if(local_file.result == 1)
 		return -1;
@@ -221,24 +221,14 @@ int16_t crud_open(char *path)
 	// Create a new file on the store if it doesn't exist
 	CrudRequest req = createRequest(0, CRUD_CREATE, 0, 0);
 	CrudResponse res = crud_bus_request(req, NULL);
-	file_st local_file = processResponse(res);
+	file_st local_file = processResponse(res, -1);
 	
 	// Check that the response did not include a failure
 	if(local_file.result == 1)
 		return -1;
-	
-	// Convert our file
-	CrudFileAllocationType file;
-	file = convertToCrudFileType(local_file);
-	strcpy(file.filename, path);
-	
-	// Initialize some stray values that aren't initialized by convertToCrudFileType()
-	file.open = 1;
-	file.position = 0;
 
-	// Get the handle
 	int16_t handle = getNewHandle();
-	crud_file_table[handle] = file;
+	convertToCrudFileType(local_file, handle, path);
 
 	return handle;
 }
@@ -275,24 +265,16 @@ int32_t crud_read(int16_t fd, void *buf, int32_t count)
 	if(!crud_initialized)
 		crud_init();
 
-	// Grab the file from the file table using the file handle
-	CrudFileAllocationType current_file = crud_file_table[fd];
-
-	if(!current_file.open)
+	if(!crud_file_table[fd].open)
 		return -1;
 
 	// Declare a new char buffer for use later
 	unsigned char tmpBuf[CRUD_MAX_OBJECT_SIZE];
 
 	// Create a request to send to the crud bus
-	CrudRequest req = createRequest(current_file.object_id, CRUD_READ, CRUD_MAX_OBJECT_SIZE, 0);
+	CrudRequest req = createRequest(crud_file_table[fd].object_id, CRUD_READ, CRUD_MAX_OBJECT_SIZE, 0);
 	CrudResponse res = crud_bus_request(req, tmpBuf);
-	file_st local_file = processResponse(res);
-
-	/*IMPORTANT CHANGE FROM PREVIOUS VERSION*/
-	// Update position
-	// TODO move to process response?
-	local_file.position = current_file.position;
+	file_st local_file = processResponse(res, fd);
 	
 	if(local_file.result == 1)
 		return -1;
@@ -311,9 +293,7 @@ int32_t crud_read(int16_t fd, void *buf, int32_t count)
 	local_file.position+=count;
 
 	// Convert and assign our file
-	CrudFileAllocationType file = convertToCrudFileType(local_file);
-	strcpy(file.filename, crud_file_table[fd].filename);
-	crud_file_table[fd] = file;
+	convertToCrudFileType(local_file, fd, crud_file_table[fd].filename);
 	
 	return count;
 }
@@ -346,9 +326,7 @@ int32_t crud_write(int16_t fd, void *buf, int32_t count)
 	// Given the fild handle, find it's OID and read the data from the store
 	CrudRequest req = createRequest(current_file.object_id, CRUD_READ, CRUD_MAX_OBJECT_SIZE, 0);
 	CrudResponse res = crud_bus_request(req, tmpBuf);
-	file_st local_file = processResponse(res);
-
-	local_file.position = current_file.position;
+	file_st local_file = processResponse(res, fd);
 
 	if(local_file.result == 1)
 		return -1;
@@ -363,8 +341,6 @@ int32_t crud_write(int16_t fd, void *buf, int32_t count)
 		if(length>CRUD_MAX_OBJECT_SIZE)
 			length = CRUD_MAX_OBJECT_SIZE;
 
-		//printf("length:%d\n",length);
-
 		req = createRequest(local_file.oid, CRUD_DELETE, local_file.length, 0);
 		int32_t tmpPos = local_file.position;
 
@@ -372,10 +348,9 @@ int32_t crud_write(int16_t fd, void *buf, int32_t count)
 
 		req = createRequest(0, CRUD_CREATE, length, 0);
 		res = crud_bus_request(req, tmpBuf);
-		file_st new_file = processResponse(res);
+		file_st new_file = processResponse(res, fd);
 
 		local_file = new_file;
-
 		local_file.position = tmpPos;
 	}
 	
@@ -386,21 +361,19 @@ int32_t crud_write(int16_t fd, void *buf, int32_t count)
 	{
 		tmpBuf[local_file.position+i] = ((unsigned char*)buf)[i];
 	}
-	int32_t tmpPos = local_file.position;
+	//int32_t tmpPos = local_file.position;
 	
 	// Update our file with the temporary buffer
 	req = createRequest(local_file.oid, CRUD_UPDATE, local_file.length, 0);
 	res = crud_bus_request(req, tmpBuf);
-	local_file = processResponse(res);
-	local_file.position = tmpPos;
+	local_file = processResponse(res, fd);
+	//local_file.position = tmpPos;
 	
 	// Update our position
 	local_file.position+=count;
 
 	// Update our file
-	CrudFileAllocationType file = convertToCrudFileType(local_file);
-	strcpy(file.filename, current_file.filename);
-	crud_file_table[fd] = file;
+	convertToCrudFileType(local_file, fd, crud_file_table[fd].filename);
 
 	return count;
 }
@@ -446,7 +419,7 @@ void crud_init()
 	void *buf = NULL;
 	CrudRequest req = createRequest(0, CRUD_INIT, 0, 0);
 	CrudResponse res = crud_bus_request(req, buf);
-	file_st file = processResponse(res);
+	file_st file = processResponse(res, -1);
 	
 	if(file.result)
 	{
@@ -498,7 +471,7 @@ CrudRequest createRequest(int32_t oid, int8_t request, int32_t length, int8_t fl
 // 		  driver or whatever
 //
 // Outputs      : A file struct 
-file_st processResponse(CrudResponse res)
+file_st processResponse(CrudResponse res, int16_t fd)
 {
 	file_st file;
 	file.result = (int8_t)( 1 & res );
@@ -523,8 +496,11 @@ file_st processResponse(CrudResponse res)
 	// OID
 	file.oid = (int32_t)(4294967295 & res);
 	// No need to shift res again.
-
-	file.position = 0;
+	
+	if(fd>=0)
+		file.position = crud_file_table[fd].position;
+	else
+		file.position = 0;
 
 	return file;
 }
@@ -548,16 +524,15 @@ int16_t getNewHandle()
 //
 // Inputs       : file_st struct to be converted to CrudFileAllocationType
 // Outputs      : CrudFileAllocationType file
-CrudFileAllocationType convertToCrudFileType(file_st file)
+CrudFileAllocationType convertToCrudFileType(file_st file, int16_t fd, char* filename)
 {
 	CrudFileAllocationType newFile = {"empty", 0, 0, 0, 0};
 	newFile.object_id = file.oid;
 	newFile.position = file.position;
 	newFile.length = file.length;
-
-	// If we're doing this, the file is open. We'll reassign this value if we're calling the 
-	// file from crud_close;
 	newFile.open = 1;
+	strcpy(newFile.filename, filename);
+	crud_file_table[fd] = newFile;
 
 	return newFile;
 }
