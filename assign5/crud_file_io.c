@@ -296,9 +296,6 @@ int32_t crud_read(int16_t fd, void *buf, int32_t count)
 	// Convert and assign our file
 	convertToCrudFileType(local_file, fd, crud_file_table[fd].filename);
 	
-	//printf("%s\n", (unsigned char*)buf);
-	//logMessage(LOG_INFO_LEVEL, "count:%d length:%d position:%d filename:%s ", count, crud_file_table[fd].length, crud_file_table[fd].position, crud_file_table[fd].filename);
-
 	return count;
 }
 
@@ -317,12 +314,8 @@ int32_t crud_read(int16_t fd, void *buf, int32_t count)
 //
 int32_t crud_write(int16_t fd, void *buf, int32_t count) 
 {
-	char lstr[1024];
-	bufToString((unsigned char *)buf, count, (unsigned char *)lstr, 1024 );
-	//printf( "buffer in write: %s \n\n", lstr);
-
 	unsigned char tmpBuf[CRUD_MAX_OBJECT_SIZE];
-	//printf("%s\n", (unsigned char*)buf);
+	
 	if(!crud_initialized)
 		crud_init();
 	
@@ -670,9 +663,6 @@ int crudIOUnitTest(void) {
 				memset(&cio_utest_buffer[cio_utest_position], ch, count);
 				bytes = crud_write(fh, &cio_utest_buffer[cio_utest_position], count);
 				
-				bufToString((unsigned char *)&cio_utest_buffer[cio_utest_position], bytes, (unsigned char *)lstr, 1024 );
-				logMessage(LOG_INFO_LEVEL, "buffer in test: %s", lstr);
-
 				if (bytes!=count) {
 					logMessage(LOG_ERROR_LEVEL, "CRUD_IO_UNIT_TEST : write failed [%d].", count);
 					return(-1);

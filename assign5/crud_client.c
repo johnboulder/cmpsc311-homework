@@ -3,8 +3,8 @@
 //  File          : crud_client.c
 //  Description   : This is the client side of the CRUD communication protocol.
 //
-//   Author       : Patrick McDaniel
-//  Last Modified : Thu Oct 30 06:59:59 EDT 2014
+//   Author       : John Stockwell
+//  Last Modified : Wed Dec 10 12:49 EDT 2014
 //
 
 // Include Files
@@ -14,25 +14,22 @@
 #include <cmpsc311_log.h>
 #include <cmpsc311_util.h>
 #include <stdio.h>
-//#include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-//#include <fcntl.h>
 #include <unistd.h>
-#include <assert.h>
 
 // Global variables
 int            crud_network_shutdown = 0; // Flag indicating shutdown
 unsigned char *crud_network_address = NULL; // Address of CRUD server 
 unsigned short crud_network_port = 0; // Port of CRUD server
-struct sockaddr_in v4;
-int socket_fd = 0;
-int connected = 0; 
-int64_t length = 0;
+struct         sockaddr_in v4; // IPV4 address
+int            socket_fd = 0; // Socket file descriptor
+int            connected = 0; // Connected flag
+int64_t        length = 0; // Number of bytes to send or read
 
 // Functions
 int64_t getRequest(CrudRequest res);
-int establishConnection();
+int     establishConnection();
 int64_t receive(CrudRequest req, void *buf);
 int64_t send1(CrudRequest req, void *buf);
 
@@ -53,18 +50,8 @@ int64_t send1(CrudRequest req, void *buf);
 CrudResponse crud_client_operation(CrudRequest op, void *buf) 
 {
 
-	/*
-	 * Useful info:
-	 * Server IP: CRUD_DEFAULT_IP
-	 * Port: CRUD_DEFAULT_PORT
-	 * When sending data: Must convert to "Network Byte Order"
-	 * When receiving data: Must convert to "Host Byte Order"
-	 * 
-	 * Must do a disconnect after a crud_close occurs
-	 */
-	// int inet_aton(const char *addr, struct in_addr *inp);
-	
-	switch(getRequest(op))
+	/* Some debug output.
+	 * switch(getRequest(op))
 	{
 		case CRUD_INIT:
 			logMessage(LOG_INFO_LEVEL, "----------------------------------------");
@@ -94,11 +81,7 @@ CrudResponse crud_client_operation(CrudRequest op, void *buf)
 			logMessage(LOG_INFO_LEVEL, "----------------------------------------");
 			logMessage(LOG_INFO_LEVEL, "CRUD_CLOSE called");
 			break;
-	};
-
-	/*TODO THE SERVER SEEMS TO BE SIMULATING ERRORS IN THE NETWORK, SO INCLUDE ERROR HANDLING
-	 * DO A WHILE LOOP THAT RETRIES UNTIL AFTER A CERTAIN NUMBER OF ATTEMPTS*/
-
+	};*/
 
 	CrudResponse res = 0;
 	res = send1(op, buf);
@@ -118,6 +101,14 @@ CrudResponse crud_client_operation(CrudRequest op, void *buf)
 	return res;
 }
 
+////////////////////////////////////////////////////////////////////////////////
+////
+//// Function     : establishConnection
+//// Description  : Just connects to the server and updates the connected flag
+////
+//// Inputs       : Nothing
+////
+//// Outputs      : 0 if successful, -1 if unsuccessful
 int establishConnection()
 {
 
@@ -135,6 +126,15 @@ int establishConnection()
 	return 0;
 }
 
+////////////////////////////////////////////////////////////////////////////////
+////
+//// Function     : receive
+//// Description  : performs a read on on the server currently connected to and
+//// 		    passes and data into buf
+////
+//// Inputs       : req - A standard 64bit crud request
+////		    buf - A void pointer we'll be passing data into
+//// Outputs      : Returns a standard 64bit response value or -1 if it fails
 int64_t receive(CrudRequest req, void *buf)
 {
 
@@ -148,7 +148,6 @@ int64_t receive(CrudRequest req, void *buf)
 	res = htonll64(res);
 	int n = read( socket_fd, &res, sizeof(res));
 	int tmpLength = 0;
-	int totalReadLength = 0;
 
 	if( n != sizeof(res) )
 	{
@@ -157,15 +156,13 @@ int64_t receive(CrudRequest req, void *buf)
 	}
 
 	res = ntohll64(res);
-	logMessage(LOG_INFO_LEVEL, "crud_client.receive() : received value of %016X", (int64_t)res);
-
+	
 	if(getRequest(res) == CRUD_READ)
 	{
 		tmpLength = length;
 		do{
 
 			n = read( socket_fd, buf, tmpLength );
-			logMessage(LOG_INFO_LEVEL, "crud_client.receive() : read  %d bytes", n);
 
 			if( n < 0 )
 			{
@@ -173,40 +170,31 @@ int64_t receive(CrudRequest req, void *buf)
 				return -1;
 			}
 
-			//logMessage(LOG_INFO_LEVEL, "buffer: %s",(unsigned char*)buf);
-
-			totalReadLength+=n;
 			tmpLength -= n;
 			buf+=n;
 
-		}while( /*tmpLength>0 &&*/ n>0 );
+		}while(  n>0 );
 		
-		//int i = 0;
-		//for( i = 0; i<length; i++)
-		//{
-		//	((unsigned char*)buf)[i] = (unsigned char)ntohs(((unsigned char*)buf)[i]);
-		//}
-
-		logMessage(LOG_INFO_LEVEL, "totalReadLength: %d length: %d", totalReadLength, length);
-		//assert(totalReadLength == length);
 	}
 
 	return res;
 
 }
 
+////////////////////////////////////////////////////////////////////////////////
+////
+//// Function     : send1
+//// Description  : Performs a write to the server currently connected to
+////
+//// Inputs       : req - A standard 64bit crud request
+////		    buf - A void pointer we'll be passing data into
+//// Outputs      : Returns a standard 64bit response value or -1 if it fails
 int64_t send1(CrudRequest req, void *buf)
 {
 
 	if(!connected)
 		if(establishConnection())
 			return -1;
-
-	//if(getRequest(req) == CRUD_WRITE)
-	//{
-	//	char lstr[1024];
-	//	bufToString((unsigned char*)buf, 
-	//}
 
 	CrudRequest tmpReq = htonll64(req);
 
@@ -220,18 +208,12 @@ int64_t send1(CrudRequest req, void *buf)
 
 	tmpReq = ntohll64(tmpReq);
 
-	logMessage(LOG_INFO_LEVEL, "crud_client.send() : sent %d bytes", n);
+	//logMessage(LOG_INFO_LEVEL, "crud_client.send() : sent %d bytes", n);
 
 	if(getRequest(req) == CRUD_CREATE || getRequest(req) == CRUD_UPDATE)
 	{
-		/*int i = 0;
-		for( i = 0; i<length; i++)
-		{
-			((unsigned char*)buf)[i] = (unsigned char)htons(((unsigned char*)buf)[i]);
-		}*/
-
 		n = write( socket_fd, buf, length );
-		logMessage(LOG_INFO_LEVEL, "crud_client.send() : sent  %d bytes", n);
+		//logMessage(LOG_INFO_LEVEL, "crud_client.send() : sent  %d bytes", n);
 
 		if( n != length )
 		{
@@ -246,46 +228,20 @@ int64_t send1(CrudRequest req, void *buf)
 
 ////////////////////////////////////////////////////////////////////////////////
 ////
-//// Function     : processResponse
-//// Description  : does all the bitshifting and other bullshit involved in taking
-////                a 64bit response and separating its parts out
+//// Function     : getRequest
+//// Description  : Sets the global variable for length, and returns the 
+////		    value of the request
+//// Inputs       : req - A standard 64bit crud request
 ////
-//// Inputs       : A response in the form of the CrudResponse struct provided in the
-////                driver or whatever
-////
-//// Outputs      : A file struct
-int64_t getRequest(CrudRequest res)
+//// Outputs      : Returns a 64bit value for the request
+int64_t getRequest(CrudRequest req)
 {
-	//file.result = (int8_t)( 1 & res );
-	//res>>=1;
-	//printf("result:%u\n",file.result);
-
-	// Flags
-	//file.flags = (int8_t)( 7 & res );
-	//res>>=3;
-	//printf("flags:%u\n",file.flags);
-
 	// Length
-	res>>=4;
-	length = (int64_t)(16777215 & res);
-	res>>=24;
-	//printf("length:%u\n",file.length);
-
-	// Request
-	//file.request = (int8_t)(15 & res);
-	//res>>=4;
-	//printf("request:%u\n",file.request);
-
-	// OID
-	//file.oid = (int32_t)(4294967295 & res);
-	// No need to shift res again.
-
-	//if(fd>=0)
-	//	file.position = crud_file_table[fd].position;
-	//else
-	//	file.position = 0;
-
-	//return file;
-	return (int64_t)(15 & res);
+	req>>=4;
+	
+	length = (int64_t)(16777215 & req);
+	req>>=24;
+	
+	return (int64_t)(15 & req);
 }
 
